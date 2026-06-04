@@ -25,20 +25,28 @@ export default function OnboardPage() {
 
   const saveKey = async (service: 'openrouter' | 'openai' | 'deepl') => {
     if (!keys[service]) return
-    await setApiKey(service, keys[service])
-    const res = await testApiKey(service)
-    setTestResult((t) => ({ ...t, [service]: res.ok ? '✓ Connected' : `✗ ${res.detail ?? 'failed'}` }))
+    try {
+      await setApiKey(service, keys[service])
+      const res = await testApiKey(service)
+      setTestResult((t) => ({ ...t, [service]: res.ok ? '✓ Connected' : `✗ ${res.detail ?? 'failed'}` }))
+    } catch {
+      setTestResult((t) => ({ ...t, [service]: '✗ Backend unreachable' }))
+    }
   }
 
   const finish = async () => {
     setSaving(true)
-    await updatePreferences({
-      user_name: name || 'User',
-      conv_model: convModel,
-      analysis_model: analysisModel,
-      onboarding_complete: true,
-    })
-    router.push('/')
+    try {
+      await updatePreferences({
+        user_name: name || 'User',
+        conv_model: convModel,
+        analysis_model: analysisModel,
+        onboarding_complete: true,
+      })
+      router.push('/')
+    } catch {
+      setSaving(false)
+    }
   }
 
   const filtered = models.filter(

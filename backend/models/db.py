@@ -6,11 +6,34 @@ from sqlalchemy import (
 from typing import Optional, List
 from datetime import datetime
 import os
+import sys
+import platform
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
-RAW_URL = os.getenv("DATABASE_URL", "sqlite:///./sprachboot.db")
+
+def _resolve_db_url() -> str:
+    env_url = os.getenv("DATABASE_URL")
+    if env_url:
+        return env_url
+    # When bundled with PyInstaller, CWD is the read-only app bundle dir.
+    # Use a stable, user-writable location instead.
+    if getattr(sys, "frozen", False):
+        if platform.system() == "Darwin":
+            data_dir = Path.home() / "Library" / "Application Support" / "SprachBoot"
+        elif platform.system() == "Windows":
+            data_dir = Path(os.environ.get("APPDATA", Path.home())) / "SprachBoot"
+        else:
+            data_dir = Path.home() / ".local" / "share" / "SprachBoot"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return f"sqlite:///{data_dir}/sprachboot.db"
+    # Dev mode: store next to this file's package root
+    return "sqlite:///./sprachboot.db"
+
+
+RAW_URL = _resolve_db_url()
 # Convert sqlite:/// → sqlite+aiosqlite:///
 if RAW_URL.startswith("sqlite:///"):
     ASYNC_URL = RAW_URL.replace("sqlite:///", "sqlite+aiosqlite:///", 1)

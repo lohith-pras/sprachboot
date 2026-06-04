@@ -16,36 +16,53 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState({ openrouter: '', openai: '', deepl: '' })
   const [testResult, setTestResult] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [keyError, setKeyError] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getPreferences().then((p) => {
-      setName(p.user_name)
-      setConvModel(p.conv_model)
-      setAnalysisModel(p.analysis_model)
-    })
-    getKeyStatus().then(setStatus)
-    getModels().then(setModels).catch(() => setModels([]))
+    Promise.all([
+      getPreferences().then((p) => {
+        setName(p.user_name)
+        setConvModel(p.conv_model)
+        setAnalysisModel(p.analysis_model)
+      }).catch(() => {}),
+      getKeyStatus().then(setStatus).catch(() => {}),
+      getModels().then(setModels).catch(() => setModels([])),
+    ]).finally(() => setLoading(false))
   }, [])
 
   const saveAccount = async () => {
-    await updatePreferences({ user_name: name, conv_model: convModel, analysis_model: analysisModel })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setSaveError('')
+    try {
+      await updatePreferences({ user_name: name, conv_model: convModel, analysis_model: analysisModel })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Save failed — is the backend running?')
+    }
   }
 
   const saveKey = async (svc: 'openrouter' | 'openai' | 'deepl') => {
     if (!keys[svc]) return
-    await setApiKey(svc, keys[svc])
-    const res = await testApiKey(svc)
-    setTestResult((t) => ({ ...t, [svc]: res.ok ? '✓ Connected' : `✗ ${res.detail ?? 'failed'}` }))
-    setStatus(await getKeyStatus())
-    setKeys((k) => ({ ...k, [svc]: '' }))
+    setKeyError((k) => ({ ...k, [svc]: '' }))
+    try {
+      await setApiKey(svc, keys[svc])
+      const res = await testApiKey(svc)
+      setTestResult((t) => ({ ...t, [svc]: res.ok ? '✓ Connected' : `✗ ${res.detail ?? 'failed'}` }))
+      setStatus(await getKeyStatus())
+      setKeys((k) => ({ ...k, [svc]: '' }))
+    } catch (e) {
+      setKeyError((k) => ({ ...k, [svc]: e instanceof Error ? e.message : 'Failed to save key' }))
+    }
   }
 
   return (
     <main className={styles.wrap}>
       <div className={styles.card}>
         <h1>Settings</h1>
+
+        {loading && <p style={{ opacity: 0.5 }}>Loading…</p>}
 
         <h2>Account</h2>
         <label>Name</label>
@@ -63,6 +80,7 @@ export default function SettingsPage() {
           {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
         <button className={styles.btn} onClick={saveAccount}>{saved ? 'Saved ✓' : 'Save'}</button>
+        {saveError && <p style={{ color: 'red', fontSize: '0.85rem', marginTop: '0.25rem' }}>{saveError}</p>}
 
         <h2>API Keys</h2>
         {(['openrouter', 'openai', 'deepl'] as const).map((svc) => (
@@ -79,6 +97,7 @@ export default function SettingsPage() {
               <button className={styles.btnGhost} onClick={() => saveKey(svc)}>Save</button>
             </div>
             {testResult[svc] && <span className={styles.test}>{testResult[svc]}</span>}
+            {keyError[svc] && <span style={{ color: 'red', fontSize: '0.8rem' }}>{keyError[svc]}</span>}
           </div>
         ))}
       </div>

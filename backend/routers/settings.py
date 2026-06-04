@@ -49,6 +49,8 @@ async def set_apikey(body: ApiKeySet):
         keychain.set_key(body.service, body.key)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Keychain error: {e}")
     return {"ok": True}
 
 
