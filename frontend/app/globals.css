@@ -385,6 +385,51 @@ p  { max-width: 60ch; }
 .bubble-row--user   { align-items: flex-end; }
 .bubble-row--ai     { align-items: flex-start; }
 
+/* ── Inline translation ──────────────────────────────────────── */
+.bubble-word {
+  position: relative;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) ease;
+}
+.bubble-word:hover { background: rgba(0, 0, 0, 0.08); }
+.word-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  z-index: 20;
+  box-shadow: var(--shadow-card);
+  cursor: default;
+}
+.bubble-translation {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  font-size: var(--text-sm);
+  font-style: italic;
+  opacity: 0.85;
+}
+.translate-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity var(--dur-fast) ease;
+}
+.translate-toggle:hover { opacity: 1; }
+
 /* ── Level badge ─────────────────────────────────────────────── */
 .level-badge {
   display: inline-flex;

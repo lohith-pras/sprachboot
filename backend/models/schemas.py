@@ -170,3 +170,15 @@ class ModelOption(BaseModel):
 class ModelsResponse(BaseModel):
     models: List[ModelOption]
 
+
+class TranslateWordRequest(BaseModel):
+    word: str
+
+
+class TranslateSentenceRequest(BaseModel):
+    text: str
+
+
+class TranslateResponse(BaseModel):
+    translation: str
+

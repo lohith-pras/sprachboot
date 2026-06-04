@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from models.db import init_db
-from routers import session, profile, review, test, analytics, settings
+from routers import session, profile, review, test, analytics, settings, translate
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ app.include_router(review.router, prefix="/review", tags=["review"])
 app.include_router(test.router, prefix="/test", tags=["test"])
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 app.include_router(settings.router, prefix="/settings", tags=["settings"])
+app.include_router(translate.router, prefix="/translate", tags=["translate"])
 
 
 @app.get("/health")
