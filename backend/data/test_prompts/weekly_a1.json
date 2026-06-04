@@ -1,0 +1,108 @@
+{
+  "word_order": [
+    {
+      "id": "wo_1",
+      "jumbled": ["gehe", "Heute", "ich", "Supermarkt", "zum"],
+      "correct": "Heute gehe ich zum Supermarkt."
+    },
+    {
+      "id": "wo_2",
+      "jumbled": ["Trinkst", "Kaffee", "du", "gerne", "?"],
+      "correct": "Trinkst du gerne Kaffee?"
+    },
+    {
+      "id": "wo_3",
+      "jumbled": ["der", "wohnt", "in", "Nähe", "Er"],
+      "correct": "Er wohnt in der Nähe."
+    },
+    {
+      "id": "wo_4",
+      "jumbled": ["müssen", "Wir", "lernen", "jetzt"],
+      "correct": "Wir müssen jetzt lernen."
+    },
+    {
+      "id": "wo_5",
+      "jumbled": ["kaufe", "ein", "Ich", "Auto", "neues"],
+      "correct": "Ich kaufe ein neues Auto."
+    },
+    {
+      "id": "wo_6",
+      "jumbled": ["ist", "Wetter", "Das", "heute", "schön", "sehr"],
+      "correct": "Das Wetter ist heute sehr schön."
+    },
+    {
+      "id": "wo_7",
+      "jumbled": ["kommst", "Woher", "du", "?"],
+      "correct": "Woher kommst du?"
+    },
+    {
+      "id": "wo_8",
+      "jumbled": ["Arbeit", "zur", "fährt", "Sie", "Fahrrad", "mit", "dem"],
+      "correct": "Sie fährt mit dem Fahrrad zur Arbeit."
+    }
+  ],
+  "vocabulary": [
+    {
+      "id": "voc_1",
+      "prompt": "Ich ___ Hunger.",
+      "options": ["habe", "bin", "gehe", "mache"],
+      "correct_index": 0
+    },
+    {
+      "id": "voc_2",
+      "prompt": "Das Buch liegt ___ dem Tisch.",
+      "options": ["an", "in", "auf", "über"],
+      "correct_index": 2
+    },
+    {
+      "id": "voc_3",
+      "prompt": "Wie ___ du?",
+      "options": ["heißt", "bist", "kommst", "sprichst"],
+      "correct_index": 0
+    },
+    {
+      "id": "voc_4",
+      "prompt": "Wir ___ heute ins Kino.",
+      "options": ["gehen", "machen", "sehen", "spielen"],
+      "correct_index": 0
+    },
+    {
+      "id": "voc_5",
+      "prompt": "Ich trinke gerne ___ mit Milch.",
+      "options": ["Wasser", "Kaffee", "Bier", "Wein"],
+      "correct_index": 1
+    },
+    {
+      "id": "voc_6",
+      "prompt": "Der Apfel ist ___.",
+      "options": ["rot", "schnell", "laut", "teuer"],
+      "correct_index": 0
+    }
+  ],
+  "short_response": [
+    {
+      "id": "sr_1",
+      "prompt": "Was machst du am Wochenende?"
+    },
+    {
+      "id": "sr_2",
+      "prompt": "Was ist dein Lieblingsessen?"
+    },
+    {
+      "id": "sr_3",
+      "prompt": "Wie kommst du zur Uni?"
+    },
+    {
+      "id": "sr_4",
+      "prompt": "Welche Sprachen sprichst du?"
+    },
+    {
+      "id": "sr_5",
+      "prompt": "Was hast du gestern gemacht?"
+    },
+    {
+      "id": "sr_6",
+      "prompt": "Wo wohnst du?"
+    }
+  ]
+}

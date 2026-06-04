@@ -1,0 +1,10 @@
+{
+  "last_scan": "2026-06-04",
+  "framework": "none (vanilla HTML/CSS/JS site under website/)",
+  "font_stack": "Plus Jakarta Sans + JetBrains Mono (Google Fonts, introduced)",
+  "palette": "Hum theme — cream paper, pear/cyan/coral multi-accent (introduced)",
+  "motion": "vanilla JS + CSS (no motion library)",
+  "spacing": "4pt scale via --space-* tokens (introduced)",
+  "preserved": [],
+  "introduced": ["full token system", "macrostructure: Bento Grid", "Hum theme", "slop-test gates"]
+}

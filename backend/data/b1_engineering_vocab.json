@@ -1,0 +1,32 @@
+{
+  "general_engineering": [
+    {"de": "die Anforderung", "en": "requirement", "example": "Die Anforderungen des Systems sind klar."},
+    {"de": "der Regelkreis", "en": "control loop", "example": "Der Regelkreis regelt die Temperatur."},
+    {"de": "die Schnittstelle", "en": "interface", "example": "Die Schnittstelle zwischen den Modulen."},
+    {"de": "auslegen", "en": "to design/dimension", "example": "Wir müssen das System neu auslegen."},
+    {"de": "die Simulation", "en": "simulation", "example": "Die Simulation zeigt das Verhalten des Systems."},
+    {"de": "der Wirkungsgrad", "en": "efficiency", "example": "Der Wirkungsgrad des Motors beträgt 95%."},
+    {"de": "die Toleranz", "en": "tolerance", "example": "Die Toleranz liegt bei ±0,1 mm."},
+    {"de": "der Prüfstand", "en": "test bench", "example": "Wir testen den Motor auf dem Prüfstand."}
+  ],
+  "ev_automotive": [
+    {"de": "das Bordnetz", "en": "vehicle electrical system", "example": "Das Bordnetz versorgt alle Verbraucher."},
+    {"de": "die Reichweite", "en": "range", "example": "Die Reichweite des Fahrzeugs beträgt 400 km."},
+    {"de": "der Ladezustand", "en": "state of charge (SoC)", "example": "Der Ladezustand des Akkus ist 80%."},
+    {"de": "V2X-Kommunikation", "en": "vehicle-to-everything communication", "example": "V2X-Kommunikation verbessert die Verkehrssicherheit."},
+    {"de": "die Batterie", "en": "battery", "example": "Die Batterie hat eine Kapazität von 75 kWh."},
+    {"de": "das Laden", "en": "charging", "example": "Das Laden dauert etwa 30 Minuten."},
+    {"de": "der Elektromotor", "en": "electric motor", "example": "Der Elektromotor ist sehr effizient."},
+    {"de": "die Rekuperation", "en": "regenerative braking", "example": "Durch Rekuperation wird Energie zurückgewonnen."}
+  ],
+  "office_professional": [
+    {"de": "die Rückfrage", "en": "follow-up question", "example": "Ich habe noch eine Rückfrage."},
+    {"de": "könnten Sie das bitte erklären?", "en": "could you explain that please?", "example": null},
+    {"de": "ich verstehe das nicht ganz", "en": "I don't quite understand that", "example": null},
+    {"de": "das Meeting", "en": "meeting", "example": "Das Meeting beginnt um 10 Uhr."},
+    {"de": "die Präsentation", "en": "presentation", "example": "Ich halte morgen eine Präsentation."},
+    {"de": "der Kollege", "en": "colleague (male)", "example": "Mein Kollege hilft mir bei der Aufgabe."},
+    {"de": "die Kollegin", "en": "colleague (female)", "example": "Meine Kollegin erklärt das Projekt."},
+    {"de": "die Deadline", "en": "deadline", "example": "Die Deadline ist Freitag."}
+  ]
+}
