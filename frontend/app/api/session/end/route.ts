@@ -1,24 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+import { NextRequest } from 'next/server'
+import { proxyPost } from '@/lib/backend-proxy'
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json()
-    const res = await fetch(`${API_URL}/session/end`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
-
-    const data = await res.json()
-    return NextResponse.json(data, { status: res.status })
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to proxy /session/end' },
-      { status: 500 }
-    )
-  }
+  return proxyPost('/session/end', req)
 }

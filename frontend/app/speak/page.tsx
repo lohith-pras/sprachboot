@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation'
 import ChatBubble from '@/components/ChatBubble'
 import ErrorOverlay from '@/components/ErrorOverlay'
 import LevelBadge from '@/components/LevelBadge'
-import { Message, ErrorItem, Topic, TurnPollResponse } from '@/lib/types'
+import { useSessionTimer } from '@/hooks/useSessionTimer'
+import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
+import { useErrorPoll } from '@/hooks/useErrorPoll'
+import { Message, ErrorItem, Topic } from '@/lib/types'
 
 const TOPICS: { value: Topic; label: string }[] = [
   { value: 'daily_life', label: 'Daily life' },
@@ -22,11 +25,10 @@ const PATTERN_NAMES: Record<string, string> = {
   "accusative_after_durch": "Wrong Case (durch + Accusative)",
   "false_friend_gift": "False Friend (Gift = Poison)",
   "dativ_after_mit": "Wrong Case (mit + Dativ)",
-};
-
-const formatPattern = (key: string) => {
-  return PATTERN_NAMES[key] || key.replace(/_/g, ' ').toUpperCase();
 }
+
+const formatPattern = (key: string) =>
+  PATTERN_NAMES[key] || key.replace(/_/g, ' ').toUpperCase()
 
 const GREETING: Message = {
   role: 'ai',
@@ -35,45 +37,22 @@ const GREETING: Message = {
 
 export default function SpeakPage() {
   const router = useRouter()
-  const [messages, setMessages]         = useState<Message[]>([GREETING])
-  const [input, setInput]               = useState('')
-  const [loading, setLoading]           = useState(false)
-  const [isRecording, setIsRecording]   = useState(false)
-  const [sessionId, setSessionId]       = useState<number | null>(null)
-  const [topic, setTopic]               = useState<Topic>('daily_life')
-  const [seconds, setSeconds]           = useState(0)
-  const [overlay, setOverlay]           = useState<{ errors: ErrorItem[]; corrected: string | null } | null>(null)
+  const [messages, setMessages]       = useState<Message[]>([GREETING])
+  const [input, setInput]             = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [sessionId, setSessionId]     = useState<number | null>(null)
+  const [topic, setTopic]             = useState<Topic>('daily_life')
+  const [overlay, setOverlay]         = useState<{ errors: ErrorItem[]; corrected: string | null } | null>(null)
   const [lastCorrection, setLastCorrection] = useState<{ errors: ErrorItem[]; corrected: string | null } | null>(null)
-  const [selectedError, setSelectedError] = useState<ErrorItem | null>(null)
   const [isSessionSummary, setIsSessionSummary] = useState(false)
-  
-  const [level, setLevel] = useState('A1')
-
-  useEffect(() => {
-    fetch('/api/profile/summary')
-      .then(res => res.json())
-      .then(data => {
-        if (data.current_level) setLevel(data.current_level)
-      })
-      .catch(console.error)
-  }, [])
-
-  // Auto-scroll to bottom of chat
-  const chatEndRef = useRef<HTMLDivElement>(null)
-  const inputRef  = useRef<HTMLTextAreaElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-
   const [correctionOpen, setCorrectionOpen] = useState(true)
+  const [level, setLevel]             = useState('A1')
 
+  const inputRef  = useRef<HTMLTextAreaElement>(null)
   const threadRef = useRef<HTMLDivElement>(null)
 
-  // Session timer
-  useEffect(() => {
-    if (messages.length <= 1) return // Wait until user sends a message
-    const id = setInterval(() => setSeconds((s) => s + 1), 1000)
-    return () => clearInterval(id)
-  }, [messages.length > 1])
+  const sessionActive = messages.length > 1
+  const seconds = useSessionTimer(sessionActive && !isSessionSummary)
 
   const formatTime = (s: number) => {
     const m = String(Math.floor(s / 60)).padStart(2, '0')
@@ -81,44 +60,29 @@ export default function SpeakPage() {
     return `${m}:${sec}`
   }
 
-  // Keep thread scrolled to bottom
+  useEffect(() => {
+    fetch('/api/profile/summary')
+      .then(res => res.json())
+      .then(data => { if (data.current_level) setLevel(data.current_level) })
+      .catch(console.error)
+  }, [])
+
   useEffect(() => {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight
     }
   }, [messages, loading])
 
-  // Poll backend for background error analysis results
-  const pollErrors = useCallback((turnId: number, msgIndex: number) => {
-    let attempts = 0
-    const MAX = 12
-
-    const tick = async () => {
-      attempts++
-      try {
-        const res = await fetch(`/api/session/${turnId}`)
-        const data: TurnPollResponse = await res.json()
-
-        if (data.error_count > 0 || data.corrected_input) {
-          setMessages((prev) => {
-            const next = [...prev]
-            next[msgIndex] = {
-              ...next[msgIndex],
-              errors: data.errors,
-              corrected_input: data.corrected_input,
-            }
-            return next
-          })
-          setLastCorrection({ errors: data.errors, corrected: data.corrected_input })
-          return // done
-        }
-      } catch { /* silent */ }
-
-      if (attempts < MAX) setTimeout(tick, 1800)
-    }
-
-    setTimeout(tick, 1500)
+  const onPollResult = useCallback((msgIndex: number, result: { errors: ErrorItem[]; corrected_input: string | null }) => {
+    setMessages((prev) => {
+      const next = [...prev]
+      next[msgIndex] = { ...next[msgIndex], errors: result.errors, corrected_input: result.corrected_input }
+      return next
+    })
+    setLastCorrection({ errors: result.errors, corrected: result.corrected_input })
   }, [])
+
+  const { poll: pollErrors } = useErrorPoll(onPollResult)
 
   const sendMessage = async (overrideText?: string) => {
     const text = (typeof overrideText === 'string' ? overrideText : input).trim()
@@ -132,12 +96,7 @@ export default function SpeakPage() {
       const res = await fetch('/api/session/turn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          user_input: text,
-          mode: 'chat',
-          topic,
-        }),
+        body: JSON.stringify({ session_id: sessionId, user_input: text, mode: 'chat', topic }),
       })
       const data = await res.json()
 
@@ -160,8 +119,6 @@ export default function SpeakPage() {
           corrected_input: null,
         }
         const next = [...prev, aiMsg]
-        // next.length - 1 is the AI message
-        // next.length - 2 is the user message
         pollErrors(data.turn_id, next.length - 2)
         return next
       })
@@ -176,54 +133,10 @@ export default function SpeakPage() {
     }
   }
 
-  const toggleRecording = async () => {
-    if (isRecording) {
-      mediaRecorderRef.current?.stop()
-      setIsRecording(false)
-      return
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data)
-      }
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        const formData = new FormData()
-        formData.append('audio', audioBlob, 'recording.webm')
-
-        setLoading(true)
-        try {
-          const res = await fetch('/api/session/transcribe', {
-            method: 'POST',
-            body: formData,
-          })
-          const data = await res.json()
-          if (data.text) {
-            // Directly send the transcribed text
-            await sendMessage(data.text)
-          }
-        } catch (e) {
-          console.error('Transcription error', e)
-        } finally {
-          setLoading(false)
-          stream.getTracks().forEach((track) => track.stop())
-        }
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-    } catch (err) {
-      console.error('Error accessing microphone', err)
-      alert('Could not access microphone.')
-    }
-  }
+  const { isRecording, toggleRecording } = useVoiceRecorder(async (text) => {
+    setLoading(false)
+    await sendMessage(text)
+  })
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -233,15 +146,12 @@ export default function SpeakPage() {
   }
 
   const endSession = async () => {
-    if (!sessionId) {
-      router.push('/')
-      return
-    }
+    if (!sessionId) { router.push('/'); return }
     try {
       await fetch('/api/session/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, duration_s: seconds })
+        body: JSON.stringify({ session_id: sessionId, duration_s: seconds }),
       })
     } catch (e) {
       console.error(e)
@@ -258,7 +168,7 @@ export default function SpeakPage() {
           <h1>Session Summary</h1>
           <p>Great job! You practiced for {formatTime(seconds)}.</p>
         </div>
-        
+
         <div className="bento">
           <article className="cell tint-paper span-2x1">
             <span className="mono-label cell__tag">Corrections Log</span>
@@ -282,7 +192,7 @@ export default function SpeakPage() {
             )}
           </article>
         </div>
-        
+
         <div style={{ marginTop: 'var(--space-2xl)', textAlign: 'center' }}>
           <button className="btn" onClick={() => router.push('/')}>Return to Dashboard</button>
         </div>
@@ -321,8 +231,8 @@ export default function SpeakPage() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
             <span className="speak-topbar__timer mono-label">{formatTime(seconds)}</span>
-            <button 
-              className="btn" 
+            <button
+              className="btn"
               style={{ padding: '0.3rem 0.75rem', fontSize: 'var(--text-xs)', backgroundColor: 'var(--color-accent-3)', boxShadow: 'none', transform: 'none' }}
               onClick={endSession}
             >
@@ -344,15 +254,11 @@ export default function SpeakPage() {
                   content={msg.content}
                   errors={msg.errors}
                   onErrorClick={() =>
-                    setOverlay({
-                      errors: msg.errors ?? [],
-                      corrected: msg.corrected_input ?? null,
-                    })
+                    setOverlay({ errors: msg.errors ?? [], corrected: msg.corrected_input ?? null })
                   }
                 />
               ))}
 
-              {/* AI typing indicator */}
               {loading && (
                 <div className="bubble-row bubble-row--ai">
                   <div className="bubble bubble--ai">
@@ -388,7 +294,7 @@ export default function SpeakPage() {
                 style={{
                   marginRight: 'var(--space-xs)',
                   color: isRecording ? 'var(--color-accent-3)' : 'inherit',
-                  borderColor: isRecording ? 'var(--color-accent-3)' : 'inherit'
+                  borderColor: isRecording ? 'var(--color-accent-3)' : 'inherit',
                 }}
               >
                 {isRecording ? 'Stop' : 'Mic'}
@@ -396,7 +302,7 @@ export default function SpeakPage() {
               <button
                 id="speak-send"
                 className="btn"
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={loading || !input.trim()}
                 type="button"
                 aria-label="Send message"
@@ -450,7 +356,6 @@ export default function SpeakPage() {
         </div>
       </div>
 
-      {/* Error overlay */}
       {overlay && (
         <ErrorOverlay
           errors={overlay.errors}

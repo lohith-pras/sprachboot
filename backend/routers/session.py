@@ -9,8 +9,19 @@ from services.memory import get_weak_patterns, get_low_confidence_words
 from services.chroma_service import get_relevant_context, add_turn_to_memory
 import tempfile
 import os
+from typing import Optional
 
 router = APIRouter()
+
+_whisper_model: Optional[object] = None
+
+
+def _get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+    return _whisper_model
 
 
 @router.post("/turn", response_model=TurnResponse)
@@ -139,12 +150,7 @@ async def get_turn_errors(turn_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
     """Transcribes an uploaded audio file to text using faster-whisper."""
-    from faster_whisper import WhisperModel
-    
-    # We load the model here. In a real production app, you might want to 
-    # load this once at startup to avoid loading overhead on every request.
-    # Using 'small' model instead of 'base' for better accent recognition
-    model = WhisperModel("small", device="cpu", compute_type="int8")
+    model = _get_whisper_model()
     
     # Save the uploaded file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
