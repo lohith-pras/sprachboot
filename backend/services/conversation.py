@@ -40,9 +40,12 @@ async def build_conversation_response(
     low_conf_words: List[str],
     current_level: str = "A1",
     chroma_context: str = "",
+    conv_model: str = LLAMA_MODEL,
+    fallback_model: str = DEEPSEEK_MODEL,
 ) -> Tuple[str, bool]:
-    """Returns (ai_response_text, english_switch_flag). Falls back to DeepSeek on 429."""
-    if not os.getenv("OPENROUTER_API_KEY"):
+    """Returns (ai_response_text, english_switch_flag). Falls back on 429."""
+    from services.openrouter_client import resolve_api_key
+    if not resolve_api_key():
         return (
             "Entschuldigung, der API-Schlüssel fehlt. Bitte konfiguriere OPENROUTER_API_KEY.",
             False,
@@ -65,10 +68,10 @@ async def build_conversation_response(
     ]
 
     try:
-        text = await call_openrouter(LLAMA_MODEL, messages, max_tokens=200, temperature=0.7)
+        text = await call_openrouter(conv_model, messages, max_tokens=200, temperature=0.7)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
-            text = await call_openrouter(DEEPSEEK_MODEL, messages, max_tokens=200, temperature=0.7)
+            text = await call_openrouter(fallback_model, messages, max_tokens=200, temperature=0.7)
         else:
             raise
 

@@ -11,10 +11,14 @@ DEEPSEEK_MODEL = "deepseek/deepseek-v4-flash"
 _HTTP_REFERER = "https://sprachboot.vercel.app"
 
 
+def resolve_api_key() -> str:
+    from services import keychain
+    return keychain.get_key("openrouter") or os.getenv("OPENROUTER_API_KEY", "")
+
+
 def _headers() -> dict:
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
     return {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {resolve_api_key()}",
         "Content-Type": "application/json",
         "HTTP-Referer": _HTTP_REFERER,
         "X-Title": "SprachBoot",

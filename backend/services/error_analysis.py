@@ -40,15 +40,19 @@ RULES:
 
 async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: str):
     """Background task: call DeepSeek, parse errors, update all DB tables."""
-    import os
-    if not os.getenv("OPENROUTER_API_KEY"):
+    from services.openrouter_client import resolve_api_key
+    from models.db import AsyncSessionLocal as _ASL, get_or_create_preferences
+    if not resolve_api_key():
         return
+    async with _ASL() as _pdb:
+        _prefs = await get_or_create_preferences(_pdb)
+        analysis_model = _prefs.analysis_model
 
     prompt = ANALYSIS_PROMPT.format(user_raw=user_raw)
 
     try:
         raw_content = await call_openrouter(
-            DEEPSEEK_MODEL,
+            analysis_model,
             [{"role": "user", "content": prompt}],
             max_tokens=600,
             temperature=0.1,

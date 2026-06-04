@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from models.db import get_db, Session as DBSession, Turn
+from models.db import get_db, Session as DBSession, Turn, get_or_create_preferences
 from models.schemas import TurnRequest, TurnResponse, SessionEndRequest, SessionEndResponse
 from services.conversation import build_conversation_response
 from services.error_analysis import analyze_errors_background
@@ -48,6 +48,8 @@ async def session_turn(
     low_conf_words = await get_low_confidence_words(db, limit=10)
     chroma_context = get_relevant_context(req.user_input, limit=3)
 
+    prefs = await get_or_create_preferences(db)
+
     # Call AI for response
     ai_response, english_switch = await build_conversation_response(
         user_input=req.user_input,
@@ -56,6 +58,8 @@ async def session_turn(
         weak_patterns=weak_patterns,
         low_conf_words=low_conf_words,
         chroma_context=chroma_context,
+        conv_model=prefs.conv_model,
+        fallback_model=prefs.analysis_model,
     )
 
     # Store the turn
