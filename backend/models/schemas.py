@@ -125,3 +125,48 @@ class TestSubmitResponse(BaseModel):
     details: dict
     breakdown: List[TestQuestionResult]
 
+
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+class PreferencesResponse(BaseModel):
+    user_name: str
+    conv_model: str
+    analysis_model: str
+    onboarding_complete: bool
+
+
+class PreferencesUpdate(BaseModel):
+    user_name: Optional[str] = None
+    conv_model: Optional[str] = None
+    analysis_model: Optional[str] = None
+    onboarding_complete: Optional[bool] = None
+
+
+class ApiKeySet(BaseModel):
+    service: str  # 'openrouter' | 'openai' | 'deepl'
+    key: str
+
+
+class ApiKeyStatus(BaseModel):
+    openrouter: bool
+    openai: bool
+    deepl: bool
+
+
+class ApiKeyTestRequest(BaseModel):
+    service: str
+
+
+class ApiKeyTestResult(BaseModel):
+    ok: bool
+    detail: Optional[str] = None
+
+
+class ModelOption(BaseModel):
+    id: str
+    name: str
+
+
+class ModelsResponse(BaseModel):
+    models: List[ModelOption]
+
