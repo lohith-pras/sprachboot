@@ -1,25 +1,52 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import LevelBadge from '@/components/LevelBadge'
 
-export const metadata = {
-  title: 'SprachBoot — Dashboard',
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+interface Profile {
+  current_level: string
+  words_confident: number
+  words_learning: number
+  total_sessions: number
+  sessions_this_week: number
+  v2_accuracy: number
+  latest_test_score: number
 }
 
-export default async function Home() {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-  let profile = { current_level: 'A1', words_confident: 0, words_learning: 0, total_sessions: 0, sessions_this_week: 0, v2_accuracy: 0.0, latest_test_score: 0.0 };
-  try {
-    const res = await fetch(`${API_URL}/profile/summary`, { cache: 'no-store' });
-    if (res.ok) profile = await res.json();
-  } catch (e) {
-    console.error('Failed to fetch profile', e);
-  }
+const DEFAULT_PROFILE: Profile = {
+  current_level: 'A1',
+  words_confident: 0,
+  words_learning: 0,
+  total_sessions: 0,
+  sessions_this_week: 0,
+  v2_accuracy: 0.0,
+  latest_test_score: 0.0,
+}
+
+export default function Home() {
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE)
+  const [userName, setUserName] = useState('there')
+
+  useEffect(() => {
+    fetch(`${API_URL}/profile/summary`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setProfile(data) })
+      .catch((e) => console.error('Failed to fetch profile', e))
+
+    fetch(`${API_URL}/settings/preferences`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data?.user_name) setUserName(data.user_name) })
+      .catch((e) => console.error('Failed to fetch preferences', e))
+  }, [])
 
   return (
     <main>
       <div className="dashboard">
         <div className="dashboard__welcome">
-          <h1>Guten Tag, Lo. 👋</h1>
+          <h1>Guten Tag, {userName}. 👋</h1>
           <p>Ready for today&apos;s conversation?</p>
         </div>
 
@@ -71,7 +98,7 @@ export default async function Home() {
           {/* Level Progress */}
           <article className="cell tint-paper">
             <span className="mono-label cell__tag">Next Level: A2</span>
-            
+
             <div style={{ marginTop: 'var(--space-md)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)' }}>
                 <span>Grammar (V2)</span>

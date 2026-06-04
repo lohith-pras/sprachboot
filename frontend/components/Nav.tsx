@@ -41,6 +41,12 @@ export default function Nav() {
           >
             Analytics
           </Link>
+          <Link
+            className={`nav__link${pathname === '/settings' ? ' active' : ''}`}
+            href="/settings"
+          >
+            Settings
+          </Link>
         </nav>
 
       </div>
