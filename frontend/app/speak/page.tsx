@@ -9,6 +9,7 @@ import { useSessionTimer } from '@/hooks/useSessionTimer'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import { useErrorPoll } from '@/hooks/useErrorPoll'
 import { Message, ErrorItem, Topic } from '@/lib/types'
+import { api } from '@/lib/api'
 
 const TOPICS: { value: Topic; label: string }[] = [
   { value: 'daily_life', label: 'Daily life' },
@@ -61,7 +62,7 @@ export default function SpeakPage() {
   }
 
   useEffect(() => {
-    fetch('/api/profile/summary')
+    fetch(api('/profile/summary'))
       .then(res => res.json())
       .then(data => { if (data.current_level) setLevel(data.current_level) })
       .catch(console.error)
@@ -93,7 +94,7 @@ export default function SpeakPage() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/session/turn', {
+      const res = await fetch(api('/session/turn'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, user_input: text, mode: 'chat', topic }),
@@ -148,7 +149,7 @@ export default function SpeakPage() {
   const endSession = async () => {
     if (!sessionId) { router.push('/'); return }
     try {
-      await fetch('/api/session/end', {
+      await fetch(api('/session/end'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, duration_s: seconds }),

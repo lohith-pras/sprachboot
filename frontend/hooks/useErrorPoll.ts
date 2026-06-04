@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from 'react'
 import { ErrorItem, TurnPollResponse } from '@/lib/types'
+import { api } from '@/lib/api'
 
 interface PollResult {
   errors: ErrorItem[]
@@ -22,7 +23,7 @@ export function useErrorPoll(
         if (cancelledRef.current.has(turnId)) return
         attempts++
         try {
-          const res = await fetch(`/api/session/${turnId}`)
+          const res = await fetch(api(`/session/turn/${turnId}`))
           const data: TurnPollResponse = await res.json()
 
           if (data.error_count > 0 || data.corrected_input) {

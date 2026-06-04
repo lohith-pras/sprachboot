@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { api } from '@/lib/api'
 
 export function useVoiceRecorder(onTranscribed: (text: string) => void) {
   const [isRecording, setIsRecording] = useState(false)
@@ -30,7 +31,7 @@ export function useVoiceRecorder(onTranscribed: (text: string) => void) {
         formData.append('audio', audioBlob, 'recording.webm')
 
         try {
-          const res = await fetch('/api/session/transcribe', { method: 'POST', body: formData })
+          const res = await fetch(api('/session/transcribe'), { method: 'POST', body: formData })
           const data = await res.json()
           if (data.text) onTranscribed(data.text)
         } catch (e) {
