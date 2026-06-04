@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { api } from '@/lib/api'
 
 export default function ReviewPage() {
   const [scenarios, setScenarios] = useState<any[]>([])
@@ -14,7 +15,7 @@ export default function ReviewPage() {
   useEffect(() => {
     async function loadDeck() {
       try {
-        const res = await fetch('/api/review/deck')
+        const res = await fetch(api('/review/deck'))
         const data = await res.json()
         setScenarios(data.scenarios || [])
       } catch (e) {
@@ -60,7 +61,7 @@ export default function ReviewPage() {
     setFeedback(null)
     
     try {
-      const res = await fetch('/api/review/check', {
+      const res = await fetch(api('/review/check'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

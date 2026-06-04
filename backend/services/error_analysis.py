@@ -1,17 +1,10 @@
 """Calls DeepSeek V4 Flash to analyze grammar errors. Runs as a FastAPI BackgroundTask."""
-import os
 import json
-import httpx
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from models.db import AsyncSessionLocal, Turn, Error, WordStat, PatternStat
+from services.openrouter_client import call_openrouter, DEEPSEEK_MODEL
 from services.spaced_repetition import update_interval
 from sqlalchemy import select
-
-load_dotenv()
-
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-DEEPSEEK_MODEL = "deepseek/deepseek-v4-flash"
 
 ANALYSIS_PROMPT = """\
 You are a German language error analyzer. The learner said:
@@ -47,37 +40,25 @@ RULES:
 
 async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: str):
     """Background task: call DeepSeek, parse errors, update all DB tables."""
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
-    if not api_key:
+    from services.openrouter_client import resolve_api_key
+    from models.db import AsyncSessionLocal as _ASL, get_or_create_preferences
+    if not resolve_api_key():
         return
+    async with _ASL() as _pdb:
+        _prefs = await get_or_create_preferences(_pdb)
+        analysis_model = _prefs.analysis_model
 
     prompt = ANALYSIS_PROMPT.format(user_raw=user_raw)
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{OPENROUTER_BASE}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://sprachboot.vercel.app",
-                    "X-Title": "SprachBoot",
-                },
-                json={
-                    "model": DEEPSEEK_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 600,
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            raw_content = data["choices"][0]["message"].get("content")
-            if not raw_content:
-                analysis = {"corrected": user_raw, "errors": []}
-            else:
-                analysis = json.loads(raw_content)
+        raw_content = await call_openrouter(
+            analysis_model,
+            [{"role": "user", "content": prompt}],
+            max_tokens=600,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        analysis = json.loads(raw_content) if raw_content else {"corrected": user_raw, "errors": []}
     except Exception as e:
         print(f"[error_analysis] DeepSeek call failed for turn {turn_id}: {e}")
         return

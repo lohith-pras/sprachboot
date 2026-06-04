@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from models.db import get_db, Session as DBSession, Turn
+from models.db import get_db, Session as DBSession, Turn, get_or_create_preferences
 from models.schemas import TurnRequest, TurnResponse, SessionEndRequest, SessionEndResponse
 from services.conversation import build_conversation_response
 from services.error_analysis import analyze_errors_background
@@ -9,8 +9,19 @@ from services.memory import get_weak_patterns, get_low_confidence_words
 from services.chroma_service import get_relevant_context, add_turn_to_memory
 import tempfile
 import os
+from typing import Optional
 
 router = APIRouter()
+
+_whisper_model: Optional[object] = None
+
+
+def _get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+    return _whisper_model
 
 
 @router.post("/turn", response_model=TurnResponse)
@@ -37,6 +48,8 @@ async def session_turn(
     low_conf_words = await get_low_confidence_words(db, limit=10)
     chroma_context = get_relevant_context(req.user_input, limit=3)
 
+    prefs = await get_or_create_preferences(db)
+
     # Call AI for response
     ai_response, english_switch = await build_conversation_response(
         user_input=req.user_input,
@@ -45,6 +58,8 @@ async def session_turn(
         weak_patterns=weak_patterns,
         low_conf_words=low_conf_words,
         chroma_context=chroma_context,
+        conv_model=prefs.conv_model,
+        fallback_model=prefs.analysis_model,
     )
 
     # Store the turn
@@ -139,12 +154,7 @@ async def get_turn_errors(turn_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
     """Transcribes an uploaded audio file to text using faster-whisper."""
-    from faster_whisper import WhisperModel
-    
-    # We load the model here. In a real production app, you might want to 
-    # load this once at startup to avoid loading overhead on every request.
-    # Using 'small' model instead of 'base' for better accent recognition
-    model = WhisperModel("small", device="cpu", compute_type="int8")
+    model = _get_whisper_model()
     
     # Save the uploaded file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:

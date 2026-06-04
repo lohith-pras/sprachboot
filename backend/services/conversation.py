@@ -2,14 +2,7 @@
 import os
 import httpx
 from typing import List, Dict, Tuple
-from dotenv import load_dotenv
-
-load_dotenv()
-
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-LLAMA_MODEL = "meta-llama/llama-3.3-70b-instruct"
-DEEPSEEK_MODEL = "deepseek/deepseek-v4-flash"
-HTTP_REFERER = "https://sprachboot.vercel.app"
+from services.openrouter_client import call_openrouter, LLAMA_MODEL, DEEPSEEK_MODEL
 
 SYSTEM_PROMPT_TEMPLATE = """\
 You are a friendly German conversation partner helping a learner reach B1 conversational fluency.
@@ -46,14 +39,13 @@ async def build_conversation_response(
     weak_patterns: List[Dict],
     low_conf_words: List[str],
     current_level: str = "A1",
-    chroma_context: str = "",  # Phase 3: filled by ChromaDB RAG
+    chroma_context: str = "",
+    conv_model: str = LLAMA_MODEL,
+    fallback_model: str = DEEPSEEK_MODEL,
 ) -> Tuple[str, bool]:
-    """
-    Returns (ai_response_text, english_switch_flag).
-    Falls back to DeepSeek if Gemma is rate-limited (429).
-    """
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
-    if not api_key:
+    """Returns (ai_response_text, english_switch_flag). Falls back on 429."""
+    from services.openrouter_client import resolve_api_key
+    if not resolve_api_key():
         return (
             "Entschuldigung, der API-Schlüssel fehlt. Bitte konfiguriere OPENROUTER_API_KEY.",
             False,
@@ -75,40 +67,11 @@ async def build_conversation_response(
         {"role": "user", "content": user_input},
     ]
 
-    async def _call(model: str) -> str:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{OPENROUTER_BASE}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": HTTP_REFERER,
-                    "X-Title": "SprachBoot",
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": 200,
-                    "temperature": 0.7,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"].get("content")
-            if not content:
-                raise httpx.HTTPStatusError(
-                    "Empty content from model",
-                    request=resp.request,
-                    response=resp,
-                )
-            return content
-
-    # Try Llama first, fall back to DeepSeek on rate-limit
     try:
-        text = await _call(LLAMA_MODEL)
+        text = await call_openrouter(conv_model, messages, max_tokens=200, temperature=0.7)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
-            text = await _call(DEEPSEEK_MODEL)
+            text = await call_openrouter(fallback_model, messages, max_tokens=200, temperature=0.7)
         else:
             raise
 

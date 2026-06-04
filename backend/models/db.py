@@ -106,6 +106,20 @@ class TestResult(Base):
     sections: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON blob
 
 
+class UserPreferences(Base):
+    __tablename__ = "user_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    user_name: Mapped[str] = mapped_column(String(100), default="User")
+    conv_model: Mapped[str] = mapped_column(
+        String(200), default="meta-llama/llama-3.3-70b-instruct"
+    )
+    analysis_model: Mapped[str] = mapped_column(
+        String(200), default="deepseek/deepseek-v4-flash"
+    )
+    onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -114,3 +128,17 @@ async def init_db():
 async def get_db() -> AsyncSession:  # type: ignore[misc]
     async with AsyncSessionLocal() as session:
         yield session
+
+
+async def get_or_create_preferences(session: AsyncSession) -> "UserPreferences":
+    from sqlalchemy import select
+    result = await session.execute(
+        select(UserPreferences).where(UserPreferences.id == 1)
+    )
+    prefs = result.scalar_one_or_none()
+    if prefs is None:
+        prefs = UserPreferences(id=1)
+        session.add(prefs)
+        await session.commit()
+        await session.refresh(prefs)
+    return prefs

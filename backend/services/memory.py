@@ -1,9 +1,8 @@
-"""SQLite memory reads/writes. Phase 1: no ChromaDB (added Phase 3)."""
+"""SQLite memory reads — weak patterns and low-confidence words."""
 from typing import List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from models.db import PatternStat, WordStat
-from datetime import datetime
 
 
 async def get_weak_patterns(db: AsyncSession, limit: int = 5) -> List[Dict]:
@@ -35,5 +34,3 @@ async def get_low_confidence_words(db: AsyncSession, limit: int = 10) -> List[st
         .limit(limit)
     )
     return list(result.scalars().all())
-
-
