@@ -211,7 +211,7 @@ export default function AnalyticsPage() {
       </div>
       
       <div style={{ marginTop: 'var(--space-2xl)', textAlign: 'center' }}>
-        <Link href="/" className="btn btn--soft">Back to Dashboard</Link>
+        <Link href="/dashboard" className="btn btn--soft">Back to Dashboard</Link>
       </div>
     </main>
   );

@@ -71,7 +71,10 @@ export default function SettingsPage() {
     try {
       await setApiKey(svc, keys[svc])
       const res = await testApiKey(svc)
-      setTestResult((t) => ({ ...t, [svc]: res.ok ? '✓ Connected' : `✗ ${res.detail ?? 'failed'}` }))
+      setTestResult((t) => ({
+        ...t,
+        [svc]: res.ok ? '✓ Saved · connected' : `✓ Saved · couldn’t verify (${res.detail ?? 'check the key'})`,
+      }))
       setStatus(await getKeyStatus())
       setKeys((k) => ({ ...k, [svc]: '' }))
     } catch (e) {
@@ -87,8 +90,8 @@ export default function SettingsPage() {
         {loading && <p style={{ opacity: 0.5 }}>Loading…</p>}
         {!loading && backendDown && (
           <p style={{ color: 'red', fontSize: '0.85rem', marginBottom: '1rem' }}>
-            Backend unreachable. If you launched from the DMG, drag SprachBoot to Applications first, then run:<br />
-            <code>xattr -cr /Applications/SprachBoot.app</code>
+            Backend unreachable. Make sure it’s running — launch the app with{' '}
+            <code>python start.py</code> from the project folder.
           </p>
         )}
 
@@ -111,9 +114,9 @@ export default function SettingsPage() {
         {saveError && <p style={{ color: 'red', fontSize: '0.85rem', marginTop: '0.25rem' }}>{saveError}</p>}
 
         <h2>API Keys</h2>
-        {(['openrouter', 'openai', 'deepl'] as const).map((svc) => (
+        {(['openrouter', 'deepl'] as const).map((svc) => (
           <div key={svc} className={styles.keyRow}>
-            <label>{svc} {status[svc] ? '✓' : '✗'}</label>
+            <label>{svc}{svc === 'deepl' ? ' (optional)' : ''} {status[svc] ? '✓' : '✗'}</label>
             <div className={styles.keyInput}>
               <input
                 className={styles.input}

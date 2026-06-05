@@ -23,14 +23,11 @@ def main():
     
     # 1. First-time setup / Environment Variables
     if not env_file.exists():
-        print_step("First-time setup detected!")
         if env_example.exists():
             shutil.copy(env_example, env_file)
-            print("✅ Created .env file from .env.example.")
-            print("\n⚠️  ACTION REQUIRED:")
-            print("   Please open the '.env' file in this folder and add your API keys (e.g., OPENROUTER_API_KEY, OPENAI_API_KEY).")
-            print("   Once you've saved the file, run 'python start.py' again to launch the app.")
-            sys.exit(0)
+            print_step("First run — created .env from .env.example.")
+            print("   No need to edit it: you'll enter your OpenRouter API key")
+            print("   in the app's onboarding screen on first launch.")
         else:
             print("❌ Error: .env.example not found.")
             sys.exit(1)
@@ -69,7 +66,7 @@ def main():
     
     try:
         backend_process = subprocess.Popen(
-            ["uv", "run", "fastapi", "dev", "main.py"],
+            ["uv", "run", "python", "run_server.py"],
             cwd=backend_dir
         )
         

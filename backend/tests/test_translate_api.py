@@ -5,15 +5,10 @@ from services import keychain, translation
 
 
 @pytest.fixture(autouse=True)
-def fake_keyring(monkeypatch):
-    store = {}
-    monkeypatch.setattr(keychain.keyring, "set_password",
-                        lambda s, n, v: store.__setitem__((s, n), v))
-    monkeypatch.setattr(keychain.keyring, "get_password",
-                        lambda s, n: store.get((s, n)))
-    monkeypatch.setattr(keychain.keyring, "delete_password",
-                        lambda s, n: store.pop((s, n), None))
-    return store
+def fake_keyring(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPRACHBOOT_KEYS_FILE", str(tmp_path / "keys.json"))
+    for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "DEEPL_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
 
 
 @pytest.fixture(autouse=True)

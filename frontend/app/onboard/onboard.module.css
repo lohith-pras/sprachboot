@@ -10,3 +10,5 @@
 .keyInput { display: flex; gap: 0.5rem; align-items: center; }
 .keyInput .input { margin: 0.25rem 0; }
 .test { font-size: 0.8rem; opacity: 0.8; }
+.hint { font-size: 0.85rem; opacity: 0.7; margin: -0.5rem 0 1rem; line-height: 1.5; }
+.btnGhost:disabled { opacity: 0.4; cursor: not-allowed; }

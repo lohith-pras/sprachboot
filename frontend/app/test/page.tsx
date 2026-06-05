@@ -141,7 +141,7 @@ export default function TestPage() {
         </div>
 
         <div style={{ textAlign: 'center', paddingBottom: 'var(--space-4xl)' }}>
-          <Link href="/" className="btn btn--lg">Back to Dashboard</Link>
+          <Link href="/dashboard" className="btn btn--lg">Back to Dashboard</Link>
         </div>
       </main>
     );

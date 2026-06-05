@@ -39,7 +39,7 @@ export default function ReviewPage() {
     return (
       <main style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
         <h2>No reviews due! 🎉</h2>
-        <Link href="/" className="btn" style={{ marginTop: 'var(--space-md)' }}>Back to Dashboard</Link>
+        <Link href="/dashboard" className="btn" style={{ marginTop: 'var(--space-md)' }}>Back to Dashboard</Link>
       </main>
     )
   }
@@ -48,7 +48,7 @@ export default function ReviewPage() {
     return (
       <main style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
         <h2>Review Complete! 🎉</h2>
-        <Link href="/" className="btn" style={{ marginTop: 'var(--space-md)' }}>Back to Dashboard</Link>
+        <Link href="/dashboard" className="btn" style={{ marginTop: 'var(--space-md)' }}>Back to Dashboard</Link>
       </main>
     )
   }
@@ -89,7 +89,7 @@ export default function ReviewPage() {
       <div className="dashboard" style={{ maxWidth: 600, margin: '0 auto', paddingTop: '10vh' }}>
         
         <div style={{ marginBottom: 'var(--space-xl)', display: 'flex', justifyContent: 'space-between' }}>
-          <Link href="/" style={{ color: 'var(--color-ink-2)' }}>← Back</Link>
+          <Link href="/dashboard" style={{ color: 'var(--color-ink-2)' }}>← Back</Link>
           <span className="mono-label">Scenario {currentIndex + 1} of {scenarios.length}</span>
         </div>
 

@@ -151,6 +151,9 @@ p  { max-width: 60ch; }
 
 .section { padding-block: var(--section-gap); }
 
+/* Onboarding-gate hold state — keeps the paper background, no white flash. */
+.app-loading { min-height: 100vh; background: var(--color-paper); }
+
 .section__head {
   text-align: center;
   margin-bottom: var(--space-2xl);
@@ -307,6 +310,24 @@ p  { max-width: 60ch; }
 }
 .nav__link:hover, .nav__link.active { color: var(--color-ink); text-decoration: none; }
 .nav__right { display: flex; align-items: center; gap: var(--space-md); }
+.nav__user {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.nav__signout {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-ink-2);
+  background: transparent;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-pill);
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  transition: color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
+}
+.nav__signout:hover { color: var(--color-ink); border-color: var(--color-ink-2); }
 
 /* ── Footer marquee ──────────────────────────────────────────── */
 .foot {

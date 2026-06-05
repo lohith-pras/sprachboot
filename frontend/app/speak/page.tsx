@@ -147,7 +147,7 @@ export default function SpeakPage() {
   }
 
   const endSession = async () => {
-    if (!sessionId) { router.push('/'); return }
+    if (!sessionId) { router.push('/dashboard'); return }
     try {
       await fetch(api('/session/end'), {
         method: 'POST',
@@ -195,7 +195,7 @@ export default function SpeakPage() {
         </div>
 
         <div style={{ marginTop: 'var(--space-2xl)', textAlign: 'center' }}>
-          <button className="btn" onClick={() => router.push('/')}>Return to Dashboard</button>
+          <button className="btn" onClick={() => router.push('/dashboard')}>Return to Dashboard</button>
         </div>
       </main>
     )

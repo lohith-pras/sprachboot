@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation'
 import {
   updatePreferences, setApiKey, testApiKey, getModels, ModelOption,
 } from '@/lib/settings'
+import { signIn } from '@/lib/auth'
 import styles from './onboard.module.css'
 
 export default function OnboardPage() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
-  const [keys, setKeys] = useState({ openrouter: '', openai: '', deepl: '' })
+  const [keys, setKeys] = useState({ openrouter: '', deepl: '' })
   const [testResult, setTestResult] = useState<Record<string, string>>({})
   const [models, setModels] = useState<ModelOption[]>([])
   const [convModel, setConvModel] = useState('meta-llama/llama-3.3-70b-instruct')
@@ -23,12 +24,18 @@ export default function OnboardPage() {
     if (step === 3) getModels().then(setModels).catch(() => setModels([]))
   }, [step])
 
-  const saveKey = async (service: 'openrouter' | 'openai' | 'deepl') => {
+  const saveKey = async (service: 'openrouter' | 'deepl') => {
     if (!keys[service]) return
+    setTestResult((t) => ({ ...t, [service]: 'Saving…' }))
     try {
       await setApiKey(service, keys[service])
       const res = await testApiKey(service)
-      setTestResult((t) => ({ ...t, [service]: res.ok ? '✓ Connected' : `✗ ${res.detail ?? 'failed'}` }))
+      setTestResult((t) => ({
+        ...t,
+        [service]: res.ok
+          ? '✓ Saved · connected'
+          : `✓ Saved · couldn’t verify (${res.detail ?? 'check the key'})`,
+      }))
     } catch {
       setTestResult((t) => ({ ...t, [service]: '✗ Backend unreachable' }))
     }
@@ -43,7 +50,8 @@ export default function OnboardPage() {
         analysis_model: analysisModel,
         onboarding_complete: true,
       })
-      router.push('/')
+      signIn(name || 'User')
+      router.push('/dashboard')
     } catch {
       setSaving(false)
     }
@@ -79,8 +87,12 @@ export default function OnboardPage() {
         {step === 2 && (
           <>
             <h1>API Keys</h1>
-            <p>Stored securely in your OS keychain — never in a file.</p>
-            {(['openrouter', 'openai', 'deepl'] as const).map((svc) => (
+            <p>Stored locally on this machine — never sent anywhere but the API providers.</p>
+            <p className={styles.hint}>
+              Only an OpenRouter key is required (it powers conversation + error analysis).
+              DeepL is optional and only adds tap-to-translate.
+            </p>
+            {(['openrouter', 'deepl'] as const).map((svc) => (
               <div key={svc} className={styles.keyRow}>
                 <label>{svc}{svc === 'deepl' ? ' (optional)' : ''}</label>
                 <div className={styles.keyInput}>
@@ -91,8 +103,12 @@ export default function OnboardPage() {
                     onChange={(e) => setKeys((k) => ({ ...k, [svc]: e.target.value }))}
                     placeholder={`${svc} key`}
                   />
-                  <button className={styles.btnGhost} onClick={() => saveKey(svc)}>
-                    Test
+                  <button
+                    className={styles.btnGhost}
+                    disabled={!keys[svc]}
+                    onClick={() => saveKey(svc)}
+                  >
+                    Save
                   </button>
                 </div>
                 {testResult[svc] && <span className={styles.test}>{testResult[svc]}</span>}
@@ -102,7 +118,7 @@ export default function OnboardPage() {
               <button className={styles.btnGhost} onClick={() => setStep(1)}>Back</button>
               <button
                 className={styles.btn}
-                disabled={!keys.openrouter || !keys.openai}
+                disabled={!keys.openrouter}
                 onClick={() => setStep(3)}
               >
                 Next

@@ -1,10 +1,10 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from models.db import get_db, Session as DBSession, Turn, get_or_create_preferences
+from models.db import get_db, Session as DBSession, Turn, get_or_create_preferences, AsyncSessionLocal
 from models.schemas import TurnRequest, TurnResponse, SessionEndRequest, SessionEndResponse
 from services.conversation import build_conversation_response
-from services.error_analysis import analyze_errors_background
+from services.error_analysis import analyze_errors, persist_analysis
 from services.memory import get_weak_patterns, get_low_confidence_words
 from services.chroma_service import get_relevant_context, add_turn_to_memory
 import tempfile
@@ -27,7 +27,6 @@ def _get_whisper_model():
 @router.post("/turn", response_model=TurnResponse)
 async def session_turn(
     req: TurnRequest,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     # Auto-create session if not provided
@@ -43,14 +42,39 @@ async def session_turn(
         if not existing:
             raise HTTPException(status_code=404, detail="Session not found")
 
-    # Get memory context
-    weak_patterns = await get_weak_patterns(db, limit=5)
-    low_conf_words = await get_low_confidence_words(db, limit=10)
-    chroma_context = get_relevant_context(req.user_input, limit=3)
+    # Step 1: Analyze current input synchronously — closes the learning loop
+    weak_patterns_before = await get_weak_patterns(db, limit=5)
+    previously_weak_keys = [p["pattern_key"] for p in weak_patterns_before]
+    analysis = await analyze_errors(req.user_input)
 
+    # Step 2: Store turn (need turn_id before persist_analysis writes errors)
+    turn = Turn(
+        session_id=session_id,
+        user_raw=req.user_input,
+        user_corrected=analysis.get("corrected"),
+        error_count=len(analysis.get("errors", [])),
+    )
+    db.add(turn)
+    await db.flush()
+    turn_id = turn.id
+
+    result2 = await db.execute(select(DBSession).where(DBSession.id == session_id))
+    sess = result2.scalar_one()
+    sess.turn_count = (sess.turn_count or 0) + 1
+    await db.commit()
+
+    # Step 3: Persist errors + success signals synchronously so state is fresh
+    await persist_analysis(turn_id, analysis, previously_weak_keys)
+
+    # Step 4: Re-read state — now reflects this turn's errors and successes
+    async with AsyncSessionLocal() as fresh_db:
+        weak_patterns = await get_weak_patterns(fresh_db, limit=5)
+        low_conf_words = await get_low_confidence_words(fresh_db, limit=10)
+
+    chroma_context = get_relevant_context(req.user_input, limit=3)
     prefs = await get_or_create_preferences(db)
 
-    # Call AI for response
+    # Step 5: Build conversation prompt with fully up-to-date state
     ai_response, english_switch = await build_conversation_response(
         user_input=req.user_input,
         mode=req.mode,
@@ -62,34 +86,16 @@ async def session_turn(
         fallback_model=prefs.analysis_model,
     )
 
-    # Store the turn
-    turn = Turn(
-        session_id=session_id,
-        user_raw=req.user_input,
-        ai_response=ai_response,
-        had_english_switch=english_switch,
-    )
-    db.add(turn)
-    await db.flush()
-    turn_id = turn.id
+    # Step 6: Update turn with AI response
+    async with AsyncSessionLocal() as upd_db:
+        upd_result = await upd_db.execute(select(Turn).where(Turn.id == turn_id))
+        upd_turn = upd_result.scalar_one()
+        upd_turn.ai_response = ai_response
+        upd_turn.had_english_switch = english_switch
+        await upd_db.commit()
 
-    # Update session turn count
-    result = await db.execute(select(DBSession).where(DBSession.id == session_id))
-    sess = result.scalar_one()
-    sess.turn_count = (sess.turn_count or 0) + 1
-
-    await db.commit()
-    
-    # Save to AI Memory (ChromaDB)
+    # Save to ChromaDB
     add_turn_to_memory(session_id, req.user_input, ai_response)
-
-    # Trigger background error analysis (non-blocking)
-    background_tasks.add_task(
-        analyze_errors_background,
-        turn_id=turn_id,
-        user_raw=req.user_input,
-        ai_response=ai_response,
-    )
 
     return TurnResponse(
         turn_id=turn_id,

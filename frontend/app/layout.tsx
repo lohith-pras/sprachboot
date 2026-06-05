@@ -1,8 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Nav from '@/components/Nav'
-import Footer from '@/components/Footer'
-import OnboardingGate from '@/components/OnboardingGate'
+import AppShell from '@/components/AppShell'
 
 export const metadata: Metadata = {
   title: 'SprachBoot — Speak German from day one',
@@ -18,10 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <OnboardingGate />
-        <Nav />
-        {children}
-        <Footer />
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   )

@@ -1,6 +1,7 @@
-"""Calls DeepSeek V4 Flash to analyze grammar errors. Runs as a FastAPI BackgroundTask."""
+"""Calls DeepSeek V4 Flash to analyze grammar errors. Runs synchronously before conversation."""
 import json
 from datetime import datetime, timedelta
+from typing import List
 from models.db import AsyncSessionLocal, Turn, Error, WordStat, PatternStat
 from services.openrouter_client import call_openrouter, DEEPSEEK_MODEL
 from services.spaced_repetition import update_interval
@@ -38,12 +39,13 @@ RULES:
 """
 
 
-async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: str):
-    """Background task: call DeepSeek, parse errors, update all DB tables."""
+async def analyze_errors(user_raw: str) -> dict:
+    """Call DeepSeek and return {corrected, errors[]}. No DB writes."""
     from services.openrouter_client import resolve_api_key
     from models.db import AsyncSessionLocal as _ASL, get_or_create_preferences
     if not resolve_api_key():
-        return
+        return {"corrected": user_raw, "errors": []}
+
     async with _ASL() as _pdb:
         _prefs = await get_or_create_preferences(_pdb)
         analysis_model = _prefs.analysis_model
@@ -58,23 +60,30 @@ async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: st
             temperature=0.1,
             response_format={"type": "json_object"},
         )
-        analysis = json.loads(raw_content) if raw_content else {"corrected": user_raw, "errors": []}
+        return json.loads(raw_content) if raw_content else {"corrected": user_raw, "errors": []}
     except Exception as e:
-        print(f"[error_analysis] DeepSeek call failed for turn {turn_id}: {e}")
-        return
+        print(f"[error_analysis] DeepSeek call failed: {e}")
+        return {"corrected": user_raw, "errors": []}
 
-    corrected = analysis.get("corrected", user_raw)
+
+async def persist_analysis(
+    turn_id: int,
+    analysis: dict,
+    previously_weak_pattern_keys: List[str] | None = None,
+):
+    """Write analysis results to DB. Also credits success on previously-weak patterns."""
+    corrected = analysis.get("corrected", "")
     errors = analysis.get("errors", [])
+    error_keys = {e.get("pattern_key") for e in errors}
 
     async with AsyncSessionLocal() as db:
-        # Update the turn record
         result = await db.execute(select(Turn).where(Turn.id == turn_id))
         turn = result.scalar_one_or_none()
         if turn:
             turn.user_corrected = corrected
             turn.error_count = len(errors)
 
-        # Insert errors + update pattern_stats
+        # Insert errors + update pattern_stats for each error
         for err in errors:
             db_error = Error(
                 turn_id=turn_id,
@@ -87,7 +96,6 @@ async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: st
             )
             db.add(db_error)
 
-            # Upsert pattern_stats
             pk = err.get("pattern_key", "unknown")
             pat_result = await db.execute(
                 select(PatternStat).where(PatternStat.pattern_key == pk)
@@ -104,6 +112,22 @@ async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: st
             pat.last_error = datetime.now()
             pat.accuracy = 1.0 - (pat.error_count / pat.total_seen)
             pat.is_weak = pat.error_count >= 3 and pat.accuracy < 0.60
+
+        # Credit success: previously-weak patterns not in this turn's errors
+        if previously_weak_pattern_keys:
+            for pk in previously_weak_pattern_keys:
+                if pk in error_keys:
+                    continue  # already handled above as an error
+                pat_result = await db.execute(
+                    select(PatternStat).where(PatternStat.pattern_key == pk)
+                )
+                pat = pat_result.scalar_one_or_none()
+                if pat is None:
+                    continue
+                pat.total_seen = (pat.total_seen or 0) + 1
+                # error_count unchanged — this was a correct use
+                pat.accuracy = 1.0 - (pat.error_count / pat.total_seen)
+                pat.is_weak = pat.error_count >= 3 and pat.accuracy < 0.60
 
         # Upsert word_stats for every word in the corrected sentence
         words = [
@@ -124,9 +148,14 @@ async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: st
             ws.last_seen = datetime.now()
             base = ws.correct_uses / max(ws.total_uses, 1)
             ws.confidence = round(base, 3)
-            # SM-2 update
             new_interval = update_interval(ws.interval_days or 1, was_correct=True)
             ws.interval_days = new_interval
             ws.next_review = datetime.now() + timedelta(days=new_interval)
 
         await db.commit()
+
+
+async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: str):
+    """Legacy wrapper — kept for any callers that still use it."""
+    analysis = await analyze_errors(user_raw)
+    await persist_analysis(turn_id, analysis)

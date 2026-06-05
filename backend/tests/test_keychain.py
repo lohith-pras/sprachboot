@@ -3,21 +3,10 @@ from services import keychain
 
 
 @pytest.fixture(autouse=True)
-def fake_keyring(monkeypatch):
-    store = {}
-    monkeypatch.setattr(
-        keychain.keyring, "set_password",
-        lambda svc, name, val: store.__setitem__((svc, name), val),
-    )
-    monkeypatch.setattr(
-        keychain.keyring, "get_password",
-        lambda svc, name: store.get((svc, name)),
-    )
-    monkeypatch.setattr(
-        keychain.keyring, "delete_password",
-        lambda svc, name: store.pop((svc, name), None),
-    )
-    return store
+def fake_keyring(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPRACHBOOT_KEYS_FILE", str(tmp_path / "keys.json"))
+    for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "DEEPL_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
 
 
 def test_set_and_get_key():

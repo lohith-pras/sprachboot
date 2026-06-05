@@ -46,3 +46,6 @@ dist/
 .claude/
 .agents/logs/
 .agents/cache/
+
+# Local API key store (plaintext, never commit)
+api_keys.json

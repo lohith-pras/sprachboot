@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { currentUser, signOut, onAuthChange } from '@/lib/auth'
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false)
+  const [user, setUser] = useState<string | null>(null)
   const pathname = usePathname()
+  const router = useRouter()
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 8)
@@ -14,10 +17,20 @@ export default function Nav() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    setUser(currentUser())
+    return onAuthChange(() => setUser(currentUser()))
+  }, [])
+
+  const handleSignOut = () => {
+    signOut()
+    router.push('/')
+  }
+
   return (
     <header className={`nav${scrolled ? ' scrolled' : ''}`} id="nav">
       <div className="nav__inner">
-        <Link className="nav__brand" href="/">
+        <Link className="nav__brand" href="/dashboard">
           <span aria-hidden="true">⛵</span>
           SprachBoot
         </Link>
@@ -49,6 +62,12 @@ export default function Nav() {
           </Link>
         </nav>
 
+        <div className="nav__right">
+          {user && <span className="nav__user">{user}</span>}
+          <button className="nav__signout" type="button" onClick={handleSignOut}>
+            Sign out
+          </button>
+        </div>
       </div>
     </header>
   )
