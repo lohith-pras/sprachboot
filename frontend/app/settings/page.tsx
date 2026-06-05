@@ -22,15 +22,36 @@ export default function SettingsPage() {
   const [backendDown, setBackendDown] = useState(false)
 
   useEffect(() => {
-    Promise.all([
-      getPreferences().then((p) => {
-        setName(p.user_name)
-        setConvModel(p.conv_model)
-        setAnalysisModel(p.analysis_model)
-      }).catch(() => setBackendDown(true)),
-      getKeyStatus().then(setStatus).catch(() => {}),
-      getModels().then(setModels).catch(() => setModels([])),
-    ]).finally(() => setLoading(false))
+    let cancelled = false
+
+    // The bundled backend can take ~15s to boot (heavy ML imports), so retry
+    // the first load before declaring it unreachable.
+    const load = async () => {
+      const attempts = 20
+      for (let i = 0; i < attempts && !cancelled; i++) {
+        try {
+          const p = await getPreferences()
+          if (cancelled) return
+          setName(p.user_name)
+          setConvModel(p.conv_model)
+          setAnalysisModel(p.analysis_model)
+          getKeyStatus().then(setStatus).catch(() => {})
+          getModels().then(setModels).catch(() => setModels([]))
+          setBackendDown(false)
+          setLoading(false)
+          return
+        } catch {
+          await new Promise((r) => setTimeout(r, 1500))
+        }
+      }
+      if (!cancelled) {
+        setBackendDown(true)
+        setLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
   }, [])
 
   const saveAccount = async () => {
