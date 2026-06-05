@@ -11,9 +11,18 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .manage(Sidecar(Mutex::new(None)))
         .setup(|app| {
-            let sidecar = app.shell().sidecar("sprachboot-server")?;
-            let (_rx, child) = sidecar.spawn()?;
-            *app.state::<Sidecar>().0.lock().unwrap() = Some(child);
+            match app.shell().sidecar("sprachboot-server").and_then(|s| s.spawn()) {
+                Ok((_rx, child)) => {
+                    *app.state::<Sidecar>().0.lock().unwrap() = Some(child);
+                }
+                Err(e) => {
+                    // Sidecar failed to start (common cause: quarantine when running
+                    // directly from DMG — user must install to /Applications first and
+                    // run: xattr -cr /Applications/SprachBoot.app).
+                    // Log and continue; the frontend shows errors for each failed API call.
+                    eprintln!("[SprachBoot] backend sidecar failed to start: {e}");
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

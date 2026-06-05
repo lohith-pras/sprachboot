@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [saveError, setSaveError] = useState('')
   const [keyError, setKeyError] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [backendDown, setBackendDown] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -26,7 +27,7 @@ export default function SettingsPage() {
         setName(p.user_name)
         setConvModel(p.conv_model)
         setAnalysisModel(p.analysis_model)
-      }).catch(() => {}),
+      }).catch(() => setBackendDown(true)),
       getKeyStatus().then(setStatus).catch(() => {}),
       getModels().then(setModels).catch(() => setModels([])),
     ]).finally(() => setLoading(false))
@@ -63,6 +64,12 @@ export default function SettingsPage() {
         <h1>Settings</h1>
 
         {loading && <p style={{ opacity: 0.5 }}>Loading…</p>}
+        {!loading && backendDown && (
+          <p style={{ color: 'red', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            Backend unreachable. If you launched from the DMG, drag SprachBoot to Applications first, then run:<br />
+            <code>xattr -cr /Applications/SprachBoot.app</code>
+          </p>
+        )}
 
         <h2>Account</h2>
         <label>Name</label>
