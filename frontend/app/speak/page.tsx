@@ -228,6 +228,14 @@ export default function SpeakPage() {
 
   if (isSessionSummary) {
     const allErrors = messages.flatMap(m => m.errors || [])
+    // Group corrections by mistake type (pattern_key), worst-recurring first.
+    const errorGroups = Object.values(
+      allErrors.reduce((acc, err) => {
+        const key = err.pattern_key || 'unknown'
+        ;(acc[key] ??= { key, label: formatPattern(key), items: [] as ErrorItem[] }).items.push(err)
+        return acc
+      }, {} as Record<string, { key: string; label: string; items: ErrorItem[] }>)
+    ).sort((a, b) => b.items.length - a.items.length)
     const said = receipt?.replay.filter(t => t.user_corrected?.trim()) ?? []
     const scorePct = receipt?.overall_score != null ? Math.round(receipt.overall_score * 100) : null
     const deltaPct = receipt?.delta != null ? Math.round(receipt.delta * 100) : null
@@ -307,20 +315,27 @@ export default function SpeakPage() {
             {allErrors.length === 0 ? (
               <p style={{ marginTop: 'var(--space-md)' }}>Flawless! No major corrections were recorded this session.</p>
             ) : (
-              <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-md)' }}>
-                {allErrors.map((err, i) => (
-                  <li key={i} style={{ padding: 'var(--space-md)', background: 'var(--color-paper-2)', borderRadius: '8px', marginBottom: 'var(--space-sm)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span className="mono-label" style={{ color: err.severity === 'high' ? 'var(--color-accent-3)' : 'var(--color-ink-2)' }}>
-                        {formatPattern(err.pattern_key)}
+              <div style={{ marginTop: 'var(--space-md)' }}>
+                {errorGroups.map((group) => (
+                  <div key={group.key} style={{ marginBottom: 'var(--space-lg)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
+                      <span className="mono-label" style={{ color: group.items.some(e => e.severity === 'high') ? 'var(--color-accent-3)' : 'var(--color-ink-2)' }}>
+                        {group.label}
                       </span>
+                      <span className="mono-label" style={{ color: 'var(--color-ink-2)' }}>×{group.items.length}</span>
                     </div>
-                    <p style={{ marginTop: 'var(--space-xs)', color: 'var(--color-accent-3)', textDecoration: 'line-through' }}>{err.user_fragment}</p>
-                    <p style={{ marginTop: '4px', color: 'var(--color-accent-2)' }}>{err.correct_form}</p>
-                    {err.rule && <p style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-sm)', color: 'var(--color-ink-2)' }}>💡 {err.rule}</p>}
-                  </li>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {group.items.map((err, i) => (
+                        <li key={i} style={{ padding: 'var(--space-md)', background: 'var(--color-paper-2)', borderRadius: '8px', marginBottom: 'var(--space-sm)' }}>
+                          <p style={{ color: 'var(--color-accent-3)', textDecoration: 'line-through' }}>{err.user_fragment}</p>
+                          <p style={{ marginTop: '4px', color: 'var(--color-accent-2)' }}>{err.correct_form}</p>
+                          {err.rule && <p style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-sm)', color: 'var(--color-ink-2)' }}>💡 {err.rule}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </article>
         </div>
