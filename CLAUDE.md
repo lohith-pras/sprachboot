@@ -657,3 +657,54 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - **SM-2 runs daily** — a cron job (APScheduler in FastAPI) that marks words due for review.
 - **Test format is LOCKED** — weekly test questions must not randomize between weeks. Same 10 questions, different ordering max. Score comparison requires consistent format.
 - **OpenRouter HTTP-Referer** — must be set to a valid URL or OpenRouter may rate-limit free model access.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
+- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## gstack
+
+For ALL web browsing, use the `/browse` skill from gstack. NEVER use `mcp__claude-in-chrome__*` tools.
+
+Available gstack skills:
+- `/office-hours`
+- `/plan-ceo-review`
+- `/plan-eng-review`
+- `/plan-design-review`
+- `/design-consultation`
+- `/design-shotgun`
+- `/design-html`
+- `/review`
+- `/ship`
+- `/land-and-deploy`
+- `/canary`
+- `/benchmark`
+- `/browse`
+- `/connect-chrome`
+- `/qa`
+- `/qa-only`
+- `/design-review`
+- `/setup-browser-cookies`
+- `/setup-deploy`
+- `/setup-gbrain`
+- `/retro`
+- `/investigate`
+- `/document-release`
+- `/document-generate`
+- `/codex`
+- `/cso`
+- `/autoplan`
+- `/plan-devex-review`
+- `/devex-review`
+- `/careful`
+- `/freeze`
+- `/guard`
+- `/unfreeze`
+- `/gstack-upgrade`
+- `/learn`

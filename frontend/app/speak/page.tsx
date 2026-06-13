@@ -8,7 +8,7 @@ import LevelBadge from '@/components/LevelBadge'
 import { useSessionTimer } from '@/hooks/useSessionTimer'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import { useErrorPoll } from '@/hooks/useErrorPoll'
-import { Message, ErrorItem, Topic } from '@/lib/types'
+import { Message, ErrorItem, Topic, Receipt } from '@/lib/types'
 import { api } from '@/lib/api'
 
 const TOPICS: { value: Topic; label: string }[] = [
@@ -46,6 +46,7 @@ export default function SpeakPage() {
   const [overlay, setOverlay]         = useState<{ errors: ErrorItem[]; corrected: string | null } | null>(null)
   const [lastCorrection, setLastCorrection] = useState<{ errors: ErrorItem[]; corrected: string | null } | null>(null)
   const [isSessionSummary, setIsSessionSummary] = useState(false)
+  const [receipt, setReceipt]         = useState<Receipt | null>(null)
   const [correctionOpen, setCorrectionOpen] = useState(true)
   const [level, setLevel]             = useState('A1')
 
@@ -154,6 +155,8 @@ export default function SpeakPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, duration_s: seconds }),
       })
+      const res = await fetch(api(`/session/${sessionId}/receipt`))
+      if (res.ok) setReceipt(await res.json())
     } catch (e) {
       console.error(e)
     } finally {
@@ -163,14 +166,60 @@ export default function SpeakPage() {
 
   if (isSessionSummary) {
     const allErrors = messages.flatMap(m => m.errors || [])
+    const said = receipt?.replay.filter(t => t.user_corrected?.trim()) ?? []
+    const scorePct = receipt?.overall_score != null ? Math.round(receipt.overall_score * 100) : null
+    const deltaPct = receipt?.delta != null ? Math.round(receipt.delta * 100) : null
+
     return (
       <main className="page section">
         <div className="section__head">
-          <h1>Session Summary</h1>
+          <h1>Growth Receipt</h1>
           <p>Great job! You practiced for {formatTime(seconds)}.</p>
         </div>
 
+        {/* Growth signal — provisional score + same-topic delta */}
         <div className="bento">
+          <article className="cell tint-paper span-2x1">
+            <span className="mono-label cell__tag">Your fluency signal · provisional</span>
+            {scorePct != null ? (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-md)', marginTop: 'var(--space-sm)' }}>
+                <span style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--color-accent-2)' }}>{scorePct}</span>
+                {receipt?.is_baseline ? (
+                  <span className="mono-label" style={{ color: 'var(--color-ink-2)' }}>
+                    Baseline set — keep practicing this topic to see your delta.
+                  </span>
+                ) : deltaPct != null ? (
+                  <span className="mono-label" style={{ color: deltaPct >= 0 ? 'var(--color-accent-2)' : 'var(--color-accent-3)' }}>
+                    {deltaPct >= 0 ? '▲' : '▼'} {Math.abs(deltaPct)} vs your recent {receipt?.topic.replace(/_/g, ' ')} sessions
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <p style={{ marginTop: 'var(--space-md)' }}>Not enough in this session to score yet — say a few sentences next time.</p>
+            )}
+            <p style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)' }}>
+              Provisional — this number gets more accurate as the difficulty engine comes online.
+            </p>
+          </article>
+        </div>
+
+        {/* "I just said that in German" — foreground corrected German */}
+        {said.length > 0 && (
+          <div className="bento" style={{ marginTop: 'var(--space-lg)' }}>
+            <article className="cell span-2x1">
+              <span className="mono-label cell__tag">Look what you said in German</span>
+              <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-md)' }}>
+                {said.map((t) => (
+                  <li key={t.turn_id} style={{ padding: 'var(--space-md)', background: 'var(--color-paper-2)', borderRadius: '8px', marginBottom: 'var(--space-sm)' }}>
+                    <p style={{ fontSize: 'var(--text-md)', color: 'var(--color-accent-2)' }}>{t.user_corrected}</p>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        )}
+
+        <div className="bento" style={{ marginTop: 'var(--space-lg)' }}>
           <article className="cell tint-paper span-2x1">
             <span className="mono-label cell__tag">Corrections Log</span>
             {allErrors.length === 0 ? (

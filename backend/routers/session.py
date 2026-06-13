@@ -2,10 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.db import get_db, Session as DBSession, Turn, get_or_create_preferences, AsyncSessionLocal
-from models.schemas import TurnRequest, TurnResponse, SessionEndRequest, SessionEndResponse
+from models.schemas import (
+    TurnRequest, TurnResponse, SessionEndRequest, SessionEndResponse,
+    ReceiptResponse, ReceiptTurn,
+)
 from services.conversation import build_conversation_response
 from services.error_analysis import analyze_errors, persist_analysis
 from services.memory import get_weak_patterns, get_low_confidence_words
+from services.receipt import recompute_session_score, build_receipt
 from services.chroma_service import get_relevant_context, add_turn_to_memory
 import tempfile
 import os
@@ -97,6 +101,11 @@ async def session_turn(
     # Save to ChromaDB
     add_turn_to_memory(session_id, req.user_input, ai_response)
 
+    # Step 7: Recompute overall_score incrementally — NOT gated on /session/end.
+    # A tab-close means /end may never fire; a NULL score would skew the baseline.
+    async with AsyncSessionLocal() as score_db:
+        await recompute_session_score(score_db, session_id)
+
     return TurnResponse(
         turn_id=turn_id,
         session_id=session_id,
@@ -123,6 +132,26 @@ async def session_end(
         session_id=sess.id,
         turn_count=sess.turn_count,
         duration_s=sess.duration_s,
+    )
+
+
+@router.get("/{session_id}/receipt", response_model=ReceiptResponse)
+async def session_receipt(session_id: int, db: AsyncSession = Depends(get_db)):
+    """Growth Receipt: corrected-foregrounded replay + same-topic delta."""
+    receipt = await build_receipt(db, session_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return ReceiptResponse(
+        session_id=receipt["session_id"],
+        topic=receipt["topic"],
+        turn_count=receipt["turn_count"],
+        overall_score=receipt["overall_score"],
+        provisional=receipt["provisional"],
+        is_baseline=receipt["is_baseline"],
+        delta=receipt["delta"],
+        trailing_avg=receipt["trailing_avg"],
+        prior_session_count=receipt["prior_session_count"],
+        replay=[ReceiptTurn(**t) for t in receipt["replay"]],
     )
 
 
