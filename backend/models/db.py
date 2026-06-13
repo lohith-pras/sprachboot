@@ -46,6 +46,7 @@ class Session(Base):
     scenario_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("scenarios.id"), nullable=True
     )
+    goals_hit: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON [{goal,hit}]
 
     turns: Mapped[List["Turn"]] = relationship("Turn", back_populates="session")
 
@@ -129,6 +130,10 @@ class Scenario(Base):
     goals: Mapped[Optional[str]] = mapped_column(Text, nullable=True)      # JSON list
     topic: Mapped[str] = mapped_column(String(50), default="scenario")
     status: Mapped[str] = mapped_column(String(20), default="active")      # 'active'|'archived'
+    # Transfer loop: rehearse → do it for real → report back.
+    transfer_status: Mapped[str] = mapped_column(String(20), default="none")  # 'none'|'pending'|'reported'
+    transfer_report: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_practiced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class UserPreferences(Base):
@@ -153,7 +158,13 @@ async def _ensure_columns(conn):
     """
     from sqlalchemy import text
     # (table, column, DDL type)
-    wanted = [("sessions", "scenario_id", "INTEGER")]
+    wanted = [
+        ("sessions", "scenario_id", "INTEGER"),
+        ("sessions", "goals_hit", "TEXT"),
+        ("scenarios", "transfer_status", "VARCHAR(20) DEFAULT 'none'"),
+        ("scenarios", "transfer_report", "TEXT"),
+        ("scenarios", "last_practiced_at", "DATETIME"),
+    ]
     for table, column, coltype in wanted:
         rows = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
         existing = {r[1] for r in rows.fetchall()}

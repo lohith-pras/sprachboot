@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from models.db import get_db, Scenario, get_or_create_preferences
-from models.schemas import ScenarioCreate, ScenarioResponse
+from models.schemas import ScenarioCreate, ScenarioResponse, TransferReport
 from services.scenario import generate_scenario, goals_to_json, goals_from_json
 from services.profile_engine import estimate_level
 
@@ -19,6 +19,8 @@ def _to_response(s: Scenario) -> ScenarioResponse:
         goals=goals_from_json(s.goals),
         topic=s.topic,
         status=s.status,
+        transfer_status=s.transfer_status,
+        transfer_report=s.transfer_report,
     )
 
 
@@ -53,6 +55,33 @@ async def list_scenarios(db: AsyncSession = Depends(get_db)):
         select(Scenario).where(Scenario.status == "active").order_by(desc(Scenario.id))
     )
     return [_to_response(s) for s in result.scalars().all()]
+
+
+@router.get("/pending", response_model=list[ScenarioResponse])
+async def pending_transfers(db: AsyncSession = Depends(get_db)):
+    """Scenarios awaiting a 'did you do it for real?' check-in (transfer loop)."""
+    result = await db.execute(
+        select(Scenario)
+        .where(Scenario.transfer_status == "pending")
+        .order_by(desc(Scenario.last_practiced_at))
+    )
+    return [_to_response(s) for s in result.scalars().all()]
+
+
+@router.post("/{scenario_id}/transfer", response_model=ScenarioResponse)
+async def file_transfer_report(
+    scenario_id: int, req: TransferReport, db: AsyncSession = Depends(get_db)
+):
+    """File a 'I did it for real' report → closes the transfer loop for this scenario."""
+    result = await db.execute(select(Scenario).where(Scenario.id == scenario_id))
+    s = result.scalar_one_or_none()
+    if s is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    s.transfer_report = req.report.strip()
+    s.transfer_status = "reported"
+    await db.commit()
+    await db.refresh(s)
+    return _to_response(s)
 
 
 @router.get("/{scenario_id}", response_model=ScenarioResponse)

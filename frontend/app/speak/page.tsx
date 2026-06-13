@@ -51,6 +51,8 @@ export default function SpeakPage() {
   const [scenarioDraft, setScenarioDraft] = useState('')
   const [showScenarioInput, setShowScenarioInput] = useState(false)
   const [declaring, setDeclaring]     = useState(false)
+  const [pendingTransfer, setPendingTransfer] = useState<Scenario | null>(null)
+  const [transferDraft, setTransferDraft] = useState('')
   const [correctionOpen, setCorrectionOpen] = useState(true)
   const [level, setLevel]             = useState('A1')
 
@@ -72,6 +74,32 @@ export default function SpeakPage() {
       .then(data => { if (data.current_level) setLevel(data.current_level) })
       .catch(console.error)
   }, [])
+
+  // Transfer loop: surface the most recent scenario awaiting a "did you do it?" check-in.
+  useEffect(() => {
+    fetch(api('/scenario/pending'))
+      .then(res => res.ok ? res.json() : [])
+      .then((list: Scenario[]) => { if (Array.isArray(list) && list.length) setPendingTransfer(list[0]) })
+      .catch(console.error)
+  }, [])
+
+  const submitTransfer = async () => {
+    if (!pendingTransfer) return
+    const report = transferDraft.trim()
+    if (!report) return
+    try {
+      await fetch(api(`/scenario/${pendingTransfer.id}/transfer`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report }),
+      })
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setPendingTransfer(null)
+      setTransferDraft('')
+    }
+  }
 
   useEffect(() => {
     if (threadRef.current) {
@@ -237,6 +265,26 @@ export default function SpeakPage() {
           </article>
         </div>
 
+        {/* Scenario goals — did you do what you came to do? */}
+        {receipt?.goals && receipt.goals.length > 0 && (
+          <div className="bento" style={{ marginTop: 'var(--space-lg)' }}>
+            <article className="cell span-2x1">
+              <span className="mono-label cell__tag">
+                {receipt.scenario_title ? `${receipt.scenario_title} · ` : ''}
+                Goals hit: {receipt.goals.filter(g => g.hit).length}/{receipt.goals.length}
+              </span>
+              <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-md)' }}>
+                {receipt.goals.map((g, i) => (
+                  <li key={i} style={{ display: 'flex', gap: 'var(--space-sm)', padding: '0.4rem 0', fontSize: 'var(--text-md)' }}>
+                    <span style={{ color: g.hit ? 'var(--color-accent-2)' : 'var(--color-ink-2)' }}>{g.hit ? '✓' : '○'}</span>
+                    <span style={{ color: g.hit ? 'inherit' : 'var(--color-ink-2)' }}>{g.goal}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        )}
+
         {/* "I just said that in German" — foreground corrected German */}
         {said.length > 0 && (
           <div className="bento" style={{ marginTop: 'var(--space-lg)' }}>
@@ -356,6 +404,39 @@ export default function SpeakPage() {
 
           {/* Chat thread */}
           <div className="speak-thread">
+            {pendingTransfer && !scenario && (
+              <div style={{ padding: 'var(--space-md)', background: 'var(--color-paper-2)', borderRadius: '8px', margin: 'var(--space-sm) 0', borderLeft: '3px solid var(--color-accent-2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="mono-label">Did you do it for real?</span>
+                  <button
+                    className="btn btn--soft"
+                    style={{ fontSize: 'var(--text-xs)', padding: '0.2rem 0.5rem' }}
+                    onClick={() => setPendingTransfer(null)}
+                    type="button"
+                  >
+                    Not yet
+                  </button>
+                </div>
+                <p style={{ fontSize: 'var(--text-sm)', margin: 'var(--space-xs) 0' }}>
+                  You rehearsed <strong>{pendingTransfer.title || pendingTransfer.situation}</strong>. How did the real thing go?
+                </p>
+                <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-sm)' }}>
+                  <input
+                    className="speak-input"
+                    style={{ flex: 1 }}
+                    value={transferDraft}
+                    onChange={(e) => setTransferDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitTransfer() }}
+                    placeholder="e.g. went to the doctor, managed in German!"
+                    aria-label="Transfer report"
+                  />
+                  <button className="btn" onClick={submitTransfer} disabled={!transferDraft.trim()} type="button">
+                    Report
+                  </button>
+                </div>
+              </div>
+            )}
+
             {showScenarioInput && !scenario && (
               <div style={{ padding: 'var(--space-md)', background: 'var(--color-paper-2)', borderRadius: '8px', margin: 'var(--space-sm) 0' }}>
                 <span className="mono-label">Describe a real situation you want to rehearse</span>

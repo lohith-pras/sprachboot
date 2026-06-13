@@ -4,7 +4,7 @@ from sqlalchemy import select
 from models.db import get_db, Session as DBSession, Turn, Scenario, get_or_create_preferences, AsyncSessionLocal
 from models.schemas import (
     TurnRequest, TurnResponse, SessionEndRequest, SessionEndResponse,
-    ReceiptResponse, ReceiptTurn,
+    ReceiptResponse, ReceiptTurn, GoalResult,
 )
 from services.conversation import build_conversation_response
 from services.error_analysis import analyze_errors, persist_analysis
@@ -13,6 +13,8 @@ from services.profile_engine import estimate_level
 from services.receipt import recompute_session_score, build_receipt
 from services.difficulty import compute_difficulty
 from services.scenario import goals_from_json
+from services.goal_scoring import score_goals, goals_hit_to_json
+from datetime import datetime
 from services.chroma_service import get_relevant_context, add_turn_to_memory
 import tempfile
 import os
@@ -169,11 +171,42 @@ async def session_end(
 
     sess.duration_s = req.duration_s
     await db.commit()
+
+    # Scenario session: score goals against the transcript + arm the transfer loop.
+    if sess.scenario_id:
+        await _score_scenario_and_arm_transfer(db, sess)
+
     return SessionEndResponse(
         session_id=sess.id,
         turn_count=sess.turn_count,
         duration_s=sess.duration_s,
     )
+
+
+async def _score_scenario_and_arm_transfer(db: AsyncSession, sess: DBSession):
+    scenario = (
+        await db.execute(select(Scenario).where(Scenario.id == sess.scenario_id))
+    ).scalar_one_or_none()
+    if scenario is None:
+        return
+    goals = goals_from_json(scenario.goals)
+    turns = (
+        await db.execute(
+            select(Turn).where(Turn.session_id == sess.id).order_by(Turn.id)
+        )
+    ).scalars().all()
+    transcript = "\n".join(
+        f"LEARNER: {t.user_corrected or t.user_raw}\nPARTNER: {t.ai_response or ''}"
+        for t in turns
+    )
+    prefs = await get_or_create_preferences(db)
+    results = await score_goals(
+        scenario.situation, goals, transcript, prefs.analysis_model
+    )
+    sess.goals_hit = goals_hit_to_json(results)
+    scenario.transfer_status = "pending"
+    scenario.last_practiced_at = datetime.now()
+    await db.commit()
 
 
 @router.get("/{session_id}/receipt", response_model=ReceiptResponse)
@@ -193,6 +226,9 @@ async def session_receipt(session_id: int, db: AsyncSession = Depends(get_db)):
         trailing_avg=receipt["trailing_avg"],
         prior_session_count=receipt["prior_session_count"],
         replay=[ReceiptTurn(**t) for t in receipt["replay"]],
+        scenario_title=receipt["scenario_title"],
+        counterpart_role=receipt["counterpart_role"],
+        goals=[GoalResult(**g) for g in receipt["goals"]],
     )
 
 

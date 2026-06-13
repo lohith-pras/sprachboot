@@ -57,6 +57,17 @@ class ScenarioResponse(BaseModel):
     goals: List[str] = []
     topic: str
     status: str
+    transfer_status: str = "none"        # 'none'|'pending'|'reported'
+    transfer_report: Optional[str] = None
+
+
+class TransferReport(BaseModel):
+    report: str
+
+
+class GoalResult(BaseModel):
+    goal: str
+    hit: bool
 
 
 # ── Growth Receipt (PR1) ────────────────────────────────────────────────────────
@@ -80,6 +91,10 @@ class ReceiptResponse(BaseModel):
     trailing_avg: Optional[float] = None
     prior_session_count: int = 0
     replay: List[ReceiptTurn] = []
+    # Scenario-scoped extras (null for non-scenario sessions)
+    scenario_title: Optional[str] = None
+    counterpart_role: Optional[str] = None
+    goals: List["GoalResult"] = []
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
