@@ -34,6 +34,17 @@ export interface ReceiptTurn {
   error_count: number
 }
 
+export interface Scenario {
+  id: number
+  situation: string
+  title: string
+  counterpart_role: string
+  opening_line: string
+  goals: string[]
+  topic: string
+  status: string
+}
+
 export interface Receipt {
   session_id: number
   topic: string

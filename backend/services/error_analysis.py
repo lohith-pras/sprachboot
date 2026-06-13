@@ -66,6 +66,33 @@ async def analyze_errors(user_raw: str) -> dict:
         return {"corrected": user_raw, "errors": []}
 
 
+# Error types that implicate a SPECIFIC word the user produced. Word-order/case
+# errors are about arrangement, not the word itself, so they must NOT penalize the
+# word's confidence — otherwise correct words get demerited for sentence structure.
+WORD_LEVEL_ERROR_TYPES = {"vocab", "false_friend", "verb_form", "gender"}
+
+
+def _tokenize(text: str) -> List[str]:
+    return [
+        t for t in (w.strip(".,!?;:\"'()«»„“”-").lower() for w in (text or "").split())
+        if len(t) > 1
+    ]
+
+
+def classify_word_uses(raw_text: str, errors: list) -> List[tuple]:
+    """Pure: map each raw-sentence word to (word, was_correct).
+
+    A word is an incorrect use only if it appears in a WORD-LEVEL error's fragment
+    (vocab/false_friend/verb_form/gender). Word-order/case errors don't demerit the
+    individual words — they're about arrangement.
+    """
+    wrong_tokens: set[str] = set()
+    for err in errors or []:
+        if err.get("error_type") in WORD_LEVEL_ERROR_TYPES:
+            wrong_tokens.update(_tokenize(err.get("user_fragment", "")))
+    return [(w, w not in wrong_tokens) for w in _tokenize(raw_text)]
+
+
 async def persist_analysis(
     turn_id: int,
     analysis: dict,
@@ -129,13 +156,13 @@ async def persist_analysis(
                 pat.accuracy = 1.0 - (pat.error_count / pat.total_seen)
                 pat.is_weak = pat.error_count >= 3 and pat.accuracy < 0.60
 
-        # Upsert word_stats for every word in the corrected sentence
-        words = [
-            w.strip(".,!?;:\"'()").lower()
-            for w in corrected.split()
-            if len(w) > 1
-        ]
-        for word in words:
+        # Credit word_stats from the RAW user sentence (what the learner actually
+        # produced), not the corrected one. A word counts as an incorrect use when it
+        # appears in a word-level error's user_fragment; otherwise it's a correct use.
+        # This is the only path that increments total_uses WITHOUT correct_uses, so
+        # confidence can finally drop below 1.0 and feed low_conf_words + SM-2.
+        raw_text = turn.user_raw if turn else corrected
+        for word, was_correct in classify_word_uses(raw_text, errors):
             w_result = await db.execute(
                 select(WordStat).where(WordStat.word == word)
             )
@@ -144,11 +171,11 @@ async def persist_analysis(
                 ws = WordStat(word=word)
                 db.add(ws)
             ws.total_uses = (ws.total_uses or 0) + 1
-            ws.correct_uses = (ws.correct_uses or 0) + 1
+            if was_correct:
+                ws.correct_uses = (ws.correct_uses or 0) + 1
             ws.last_seen = datetime.now()
-            base = ws.correct_uses / max(ws.total_uses, 1)
-            ws.confidence = round(base, 3)
-            new_interval = update_interval(ws.interval_days or 1, was_correct=True)
+            ws.confidence = round((ws.correct_uses or 0) / max(ws.total_uses, 1), 3)
+            new_interval = update_interval(ws.interval_days or 1, was_correct=was_correct)
             ws.interval_days = new_interval
             ws.next_review = datetime.now() + timedelta(days=new_interval)
 

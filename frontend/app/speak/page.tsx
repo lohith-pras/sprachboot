@@ -8,7 +8,7 @@ import LevelBadge from '@/components/LevelBadge'
 import { useSessionTimer } from '@/hooks/useSessionTimer'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import { useErrorPoll } from '@/hooks/useErrorPoll'
-import { Message, ErrorItem, Topic, Receipt } from '@/lib/types'
+import { Message, ErrorItem, Topic, Receipt, Scenario } from '@/lib/types'
 import { api } from '@/lib/api'
 
 const TOPICS: { value: Topic; label: string }[] = [
@@ -47,6 +47,10 @@ export default function SpeakPage() {
   const [lastCorrection, setLastCorrection] = useState<{ errors: ErrorItem[]; corrected: string | null } | null>(null)
   const [isSessionSummary, setIsSessionSummary] = useState(false)
   const [receipt, setReceipt]         = useState<Receipt | null>(null)
+  const [scenario, setScenario]       = useState<Scenario | null>(null)
+  const [scenarioDraft, setScenarioDraft] = useState('')
+  const [showScenarioInput, setShowScenarioInput] = useState(false)
+  const [declaring, setDeclaring]     = useState(false)
   const [correctionOpen, setCorrectionOpen] = useState(true)
   const [level, setLevel]             = useState('A1')
 
@@ -98,7 +102,7 @@ export default function SpeakPage() {
       const res = await fetch(api('/session/turn'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, user_input: text, mode: 'chat', topic }),
+        body: JSON.stringify({ session_id: sessionId, user_input: text, mode: 'chat', topic, scenario_id: scenario?.id ?? null }),
       })
       const data = await res.json()
 
@@ -162,6 +166,36 @@ export default function SpeakPage() {
     } finally {
       setIsSessionSummary(true)
     }
+  }
+
+  const declareScenario = async () => {
+    const situation = scenarioDraft.trim()
+    if (!situation || declaring) return
+    setDeclaring(true)
+    try {
+      const res = await fetch(api('/scenario'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ situation }),
+      })
+      if (!res.ok) throw new Error('scenario create failed')
+      const sc: Scenario = await res.json()
+      setScenario(sc)
+      setSessionId(null)                       // fresh session, tagged scenario:<id> server-side
+      setMessages([{ role: 'ai', content: sc.opening_line }])
+      setShowScenarioInput(false)
+      setScenarioDraft('')
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDeclaring(false)
+    }
+  }
+
+  const exitScenario = () => {
+    setScenario(null)
+    setSessionId(null)
+    setMessages([GREETING])
   }
 
   if (isSessionSummary) {
@@ -258,16 +292,42 @@ export default function SpeakPage() {
         <div className="speak-topbar">
           <LevelBadge level={level as any} />
 
-          <select
-            className="topic-select"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value as Topic)}
-            aria-label="Conversation topic"
-          >
-            {TOPICS.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
+          {scenario ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+              <span className="mono-label" title={scenario.situation} style={{ color: 'var(--color-accent-2)' }}>
+                🎭 {scenario.counterpart_role}
+              </span>
+              <button
+                className="btn btn--soft"
+                style={{ fontSize: 'var(--text-xs)', padding: '0.3rem 0.6rem' }}
+                onClick={exitScenario}
+                type="button"
+              >
+                Exit
+              </button>
+            </div>
+          ) : (
+            <>
+              <select
+                className="topic-select"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value as Topic)}
+                aria-label="Conversation topic"
+              >
+                {TOPICS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              <button
+                className="btn btn--soft"
+                style={{ fontSize: 'var(--text-xs)', padding: '0.3rem 0.75rem' }}
+                onClick={() => setShowScenarioInput((v) => !v)}
+                type="button"
+              >
+                Rehearse a scenario
+              </button>
+            </>
+          )}
 
           <button
             className="btn btn--soft"
@@ -296,6 +356,36 @@ export default function SpeakPage() {
 
           {/* Chat thread */}
           <div className="speak-thread">
+            {showScenarioInput && !scenario && (
+              <div style={{ padding: 'var(--space-md)', background: 'var(--color-paper-2)', borderRadius: '8px', margin: 'var(--space-sm) 0' }}>
+                <span className="mono-label">Describe a real situation you want to rehearse</span>
+                <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-sm)' }}>
+                  <input
+                    className="speak-input"
+                    style={{ flex: 1 }}
+                    value={scenarioDraft}
+                    onChange={(e) => setScenarioDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') declareScenario() }}
+                    placeholder="e.g. doctor visit, knee pain, Tuesday morning"
+                    aria-label="Scenario situation"
+                    disabled={declaring}
+                  />
+                  <button className="btn" onClick={declareScenario} disabled={declaring || !scenarioDraft.trim()} type="button">
+                    {declaring ? 'Building…' : 'Start'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {scenario && scenario.goals.length > 0 && (
+              <div style={{ padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-paper-2)', borderRadius: '8px', margin: 'var(--space-sm) 0' }}>
+                <span className="mono-label">Your goals · {scenario.title}</span>
+                <ul style={{ margin: 'var(--space-xs) 0 0', paddingLeft: '1.1rem', fontSize: 'var(--text-sm)' }}>
+                  {scenario.goals.map((g, i) => <li key={i}>{g}</li>)}
+                </ul>
+              </div>
+            )}
+
             <div className="bubble-thread" ref={threadRef}>
               {messages.map((msg, i) => (
                 <ChatBubble

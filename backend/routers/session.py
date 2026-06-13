@@ -1,15 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from models.db import get_db, Session as DBSession, Turn, get_or_create_preferences, AsyncSessionLocal
+from models.db import get_db, Session as DBSession, Turn, Scenario, get_or_create_preferences, AsyncSessionLocal
 from models.schemas import (
     TurnRequest, TurnResponse, SessionEndRequest, SessionEndResponse,
     ReceiptResponse, ReceiptTurn,
 )
 from services.conversation import build_conversation_response
 from services.error_analysis import analyze_errors, persist_analysis
-from services.memory import get_weak_patterns, get_low_confidence_words
+from services.memory import get_weak_patterns, get_low_confidence_words, get_session_history
+from services.profile_engine import estimate_level
 from services.receipt import recompute_session_score, build_receipt
+from services.difficulty import compute_difficulty
+from services.scenario import goals_from_json
 from services.chroma_service import get_relevant_context, add_turn_to_memory
 import tempfile
 import os
@@ -33,9 +36,11 @@ async def session_turn(
     req: TurnRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    # Auto-create session if not provided
+    # Auto-create session if not provided. A scenario session is topic-tagged
+    # "scenario:<id>" so PR1's same-topic receipt delta auto-scopes per scenario.
     if req.session_id is None:
-        new_session = DBSession(mode=req.mode, topic=req.topic)
+        topic = f"scenario:{req.scenario_id}" if req.scenario_id else req.topic
+        new_session = DBSession(mode=req.mode, topic=topic, scenario_id=req.scenario_id)
         db.add(new_session)
         await db.flush()
         session_id = new_session.id
@@ -74,18 +79,54 @@ async def session_turn(
     async with AsyncSessionLocal() as fresh_db:
         weak_patterns = await get_weak_patterns(fresh_db, limit=5)
         low_conf_words = await get_low_confidence_words(fresh_db, limit=10)
+        current_level = await estimate_level(fresh_db)
+        history = await get_session_history(fresh_db, session_id, before_turn_id=turn_id)
+
+        # Closed-loop difficulty: react to the most recent turns (incl. this one).
+        recent = (
+            await fresh_db.execute(
+                select(Turn).where(Turn.session_id == session_id)
+                .order_by(Turn.id.desc()).limit(3)
+            )
+        ).scalars().all()
+        recent_signals = [
+            {"error_count": t.error_count or 0, "word_count": len((t.user_raw or "").split())}
+            for t in reversed(recent)
+        ]
+        difficulty = compute_difficulty(recent_signals)
+
+        # Load scenario role-play setup if this is a scenario session.
+        sess_row = (
+            await fresh_db.execute(select(DBSession).where(DBSession.id == session_id))
+        ).scalar_one_or_none()
+        scenario_obj = None
+        sc_id = getattr(sess_row, "scenario_id", None) or req.scenario_id
+        if sc_id:
+            s = (
+                await fresh_db.execute(select(Scenario).where(Scenario.id == sc_id))
+            ).scalar_one_or_none()
+            if s is not None:
+                scenario_obj = {
+                    "counterpart_role": s.counterpart_role,
+                    "situation": s.situation,
+                    "goals": goals_from_json(s.goals),
+                }
 
     chroma_context = get_relevant_context(req.user_input, limit=3)
     prefs = await get_or_create_preferences(db)
 
-    # Step 5: Build conversation prompt with fully up-to-date state
+    # Step 5: Build conversation prompt with fully up-to-date state + in-session memory
     ai_response, english_switch = await build_conversation_response(
         user_input=req.user_input,
         mode=req.mode,
         topic=req.topic,
         weak_patterns=weak_patterns,
         low_conf_words=low_conf_words,
+        current_level=current_level,
         chroma_context=chroma_context,
+        history=history,
+        scenario=scenario_obj,
+        difficulty_directive=difficulty["directive"],
         conv_model=prefs.conv_model,
         fallback_model=prefs.analysis_model,
     )
