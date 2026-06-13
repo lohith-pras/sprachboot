@@ -41,6 +41,29 @@ class SessionEndResponse(BaseModel):
     duration_s: int
 
 
+# ── Growth Receipt (PR1) ────────────────────────────────────────────────────────
+
+class ReceiptTurn(BaseModel):
+    turn_id: int
+    user_corrected: str       # foregrounded: "look what you can say now"
+    user_raw: str             # kept for reference, not the headline
+    ai_response: str
+    error_count: int
+
+
+class ReceiptResponse(BaseModel):
+    session_id: int
+    topic: str
+    turn_count: int
+    overall_score: Optional[float] = None   # provisional — labeled in UI
+    provisional: bool = True
+    is_baseline: bool                       # True when <2 same-topic priors
+    delta: Optional[float] = None           # vs trailing avg of same-topic priors
+    trailing_avg: Optional[float] = None
+    prior_session_count: int = 0
+    replay: List[ReceiptTurn] = []
+
+
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 class WeakPattern(BaseModel):

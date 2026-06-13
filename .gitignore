@@ -49,3 +49,6 @@ dist/
 
 # Local API key store (plaintext, never commit)
 api_keys.json
+
+# Generated knowledge graph (regenerate with: graphify update .)
+graphify-out/

@@ -25,3 +25,24 @@ export interface Message {
 }
 
 export type Topic = 'daily_life' | 'uni' | 'engineering' | 'test'
+
+export interface ReceiptTurn {
+  turn_id: number
+  user_corrected: string
+  user_raw: string
+  ai_response: string
+  error_count: number
+}
+
+export interface Receipt {
+  session_id: number
+  topic: string
+  turn_count: number
+  overall_score: number | null
+  provisional: boolean
+  is_baseline: boolean
+  delta: number | null
+  trailing_avg: number | null
+  prior_session_count: number
+  replay: ReceiptTurn[]
+}
