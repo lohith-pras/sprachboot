@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from models.db import init_db
-from routers import session, profile, review, test, analytics, settings, translate
+from routers import session, profile, review, test, analytics, settings, translate, scenario
 
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(session.router, prefix="/session", tags=["session"])
+app.include_router(scenario.router, prefix="/scenario", tags=["scenario"])
 app.include_router(profile.router, prefix="/profile", tags=["profile"])
 app.include_router(review.router, prefix="/review", tags=["review"])
 app.include_router(test.router, prefix="/test", tags=["test"])

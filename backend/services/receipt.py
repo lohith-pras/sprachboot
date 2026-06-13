@@ -23,7 +23,8 @@ grouping inherits a clean, topic-tagged history.
 from typing import List, Dict, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from models.db import Session as DBSession, Turn, Error
+from models.db import Session as DBSession, Turn, Error, Scenario
+from services.goal_scoring import goals_hit_from_json
 
 # ── Score weights / normalization caps (documented above) ───────────────────────
 SEVERITY_WEIGHT: Dict[str, float] = {"high": 1.0, "medium": 0.6, "low": 0.3}
@@ -180,6 +181,18 @@ async def build_receipt(db: AsyncSession, session_id: int) -> Optional[Dict]:
         trailing_avg = round(sum(priors) / len(priors), 4)
         delta = round(score - trailing_avg, 4) if score is not None else None
 
+    # Scenario-scoped extras.
+    scenario_title = None
+    counterpart_role = None
+    goals = goals_hit_from_json(sess.goals_hit)
+    if sess.scenario_id:
+        sc = (
+            await db.execute(select(Scenario).where(Scenario.id == sess.scenario_id))
+        ).scalar_one_or_none()
+        if sc is not None:
+            scenario_title = sc.title
+            counterpart_role = sc.counterpart_role
+
     return {
         "session_id": sess.id,
         "topic": sess.topic,
@@ -191,4 +204,7 @@ async def build_receipt(db: AsyncSession, session_id: int) -> Optional[Dict]:
         "trailing_avg": trailing_avg,
         "prior_session_count": len(priors),
         "replay": replay,
+        "scenario_title": scenario_title,
+        "counterpart_role": counterpart_role,
+        "goals": goals,
     }

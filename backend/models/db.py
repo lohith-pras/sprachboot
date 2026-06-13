@@ -43,6 +43,10 @@ class Session(Base):
     topic: Mapped[str] = mapped_column(String(50), default="daily_life")
     turn_count: Mapped[int] = mapped_column(Integer, default=0)
     overall_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scenario_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("scenarios.id"), nullable=True
+    )
+    goals_hit: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON [{goal,hit}]
 
     turns: Mapped[List["Turn"]] = relationship("Turn", back_populates="session")
 
@@ -55,7 +59,7 @@ class Turn(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     user_raw: Mapped[str] = mapped_column(Text)
     user_corrected: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_response: Mapped[str] = mapped_column(Text)
+    ai_response: Mapped[str] = mapped_column(Text, default="")  # filled after AI replies
     error_count: Mapped[int] = mapped_column(Integer, default=0)
     had_english_switch: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -114,6 +118,24 @@ class TestResult(Base):
     sections: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON blob
 
 
+class Scenario(Base):
+    __tablename__ = "scenarios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    situation: Mapped[str] = mapped_column(Text)            # raw user declaration
+    title: Mapped[str] = mapped_column(String(120), default="")
+    counterpart_role: Mapped[str] = mapped_column(String(80), default="")  # who AI plays
+    opening_line: Mapped[str] = mapped_column(Text, default="")            # AI's first line
+    goals: Mapped[Optional[str]] = mapped_column(Text, nullable=True)      # JSON list
+    topic: Mapped[str] = mapped_column(String(50), default="scenario")
+    status: Mapped[str] = mapped_column(String(20), default="active")      # 'active'|'archived'
+    # Transfer loop: rehearse → do it for real → report back.
+    transfer_status: Mapped[str] = mapped_column(String(20), default="none")  # 'none'|'pending'|'reported'
+    transfer_report: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_practiced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class UserPreferences(Base):
     __tablename__ = "user_preferences"
 
@@ -128,9 +150,34 @@ class UserPreferences(Base):
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+async def _ensure_columns(conn):
+    """Lightweight idempotent migration — create_all does not ALTER existing tables.
+
+    Adds columns introduced after a table was first created. SQLite supports
+    ADD COLUMN; each add is guarded by a PRAGMA check so it is safe to re-run.
+    """
+    from sqlalchemy import text
+    # (table, column, DDL type)
+    wanted = [
+        ("sessions", "scenario_id", "INTEGER"),
+        ("sessions", "goals_hit", "TEXT"),
+        ("scenarios", "transfer_status", "VARCHAR(20) DEFAULT 'none'"),
+        ("scenarios", "transfer_report", "TEXT"),
+        ("scenarios", "last_practiced_at", "DATETIME"),
+    ]
+    for table, column, coltype in wanted:
+        rows = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
+        existing = {r[1] for r in rows.fetchall()}
+        if column not in existing:
+            await conn.exec_driver_sql(
+                f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"
+            )
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _ensure_columns(conn)
 
 
 async def get_db() -> AsyncSession:  # type: ignore[misc]

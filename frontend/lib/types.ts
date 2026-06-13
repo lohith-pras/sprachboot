@@ -34,6 +34,24 @@ export interface ReceiptTurn {
   error_count: number
 }
 
+export interface Scenario {
+  id: number
+  situation: string
+  title: string
+  counterpart_role: string
+  opening_line: string
+  goals: string[]
+  topic: string
+  status: string
+  transfer_status: 'none' | 'pending' | 'reported'
+  transfer_report: string | null
+}
+
+export interface GoalResult {
+  goal: string
+  hit: boolean
+}
+
 export interface Receipt {
   session_id: number
   topic: string
@@ -45,4 +63,7 @@ export interface Receipt {
   trailing_avg: number | null
   prior_session_count: number
   replay: ReceiptTurn[]
+  scenario_title: string | null
+  counterpart_role: string | null
+  goals: GoalResult[]
 }

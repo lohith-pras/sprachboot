@@ -19,6 +19,7 @@ class TurnRequest(BaseModel):
     user_input: str
     mode: str = "chat"    # 'voice' | 'chat'
     topic: str = "daily_life"
+    scenario_id: Optional[int] = None  # set to run a Scenario Studio role-play
 
 
 class TurnResponse(BaseModel):
@@ -39,6 +40,34 @@ class SessionEndResponse(BaseModel):
     session_id: int
     turn_count: int
     duration_s: int
+
+
+# ── Scenario Studio (PR2) ───────────────────────────────────────────────────────
+
+class ScenarioCreate(BaseModel):
+    situation: str            # "doctor, knee pain, Tuesday"
+
+
+class ScenarioResponse(BaseModel):
+    id: int
+    situation: str
+    title: str
+    counterpart_role: str
+    opening_line: str
+    goals: List[str] = []
+    topic: str
+    status: str
+    transfer_status: str = "none"        # 'none'|'pending'|'reported'
+    transfer_report: Optional[str] = None
+
+
+class TransferReport(BaseModel):
+    report: str
+
+
+class GoalResult(BaseModel):
+    goal: str
+    hit: bool
 
 
 # ── Growth Receipt (PR1) ────────────────────────────────────────────────────────
@@ -62,6 +91,10 @@ class ReceiptResponse(BaseModel):
     trailing_avg: Optional[float] = None
     prior_session_count: int = 0
     replay: List[ReceiptTurn] = []
+    # Scenario-scoped extras (null for non-scenario sessions)
+    scenario_title: Optional[str] = None
+    counterpart_role: Optional[str] = None
+    goals: List["GoalResult"] = []
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
