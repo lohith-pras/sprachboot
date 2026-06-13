@@ -59,7 +59,7 @@ class Turn(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     user_raw: Mapped[str] = mapped_column(Text)
     user_corrected: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_response: Mapped[str] = mapped_column(Text)
+    ai_response: Mapped[str] = mapped_column(Text, default="")  # filled after AI replies
     error_count: Mapped[int] = mapped_column(Integer, default=0)
     had_english_switch: Mapped[bool] = mapped_column(Boolean, default=False)
 
