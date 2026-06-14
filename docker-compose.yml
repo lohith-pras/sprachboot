@@ -1,0 +1,32 @@
+# SprachBoot — local-first, single-user-per-install. `docker compose up` boots
+# backend + frontend. Each install uses its own OpenRouter key (entered in the
+# app's onboarding screen, persisted in the named volume). No host Node/Python/uv.
+services:
+  backend:
+    image: ghcr.io/lohith-pras/sprachboot-backend:latest
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      # All persistent state lives in the /data volume, not the image.
+      DATABASE_URL: sqlite:////data/sprachboot.db
+      CHROMA_PERSIST_DIR: /data/chroma
+      SPRACHBOOT_KEYS_FILE: /data/api_keys.json
+    volumes:
+      - sprachboot-data:/data
+
+  frontend:
+    image: ghcr.io/lohith-pras/sprachboot-frontend:latest
+    build:
+      context: ./frontend
+      args:
+        # Inlined at build time. The browser reaches the backend on the host port.
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  sprachboot-data:

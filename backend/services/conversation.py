@@ -1,8 +1,7 @@
-"""Builds the Llama prompt and calls OpenRouter. Falls back to DeepSeek on rate-limit."""
-import os
+"""Builds the conversation prompt and calls OpenRouter, with a fallback model on failure."""
 import httpx
 from typing import List, Dict, Tuple
-from services.openrouter_client import call_openrouter, LLAMA_MODEL, DEEPSEEK_MODEL
+from services.openrouter_client import call_openrouter, CONV_MODEL, DEEPSEEK_MODEL
 
 SYSTEM_PROMPT_TEMPLATE = """\
 You are a friendly German conversation partner helping a learner reach B1 conversational fluency.
@@ -69,10 +68,11 @@ async def build_conversation_response(
     history: List[Dict] | None = None,
     scenario: Dict | None = None,
     difficulty_directive: str = "",
-    conv_model: str = LLAMA_MODEL,
+    conv_model: str = CONV_MODEL,
     fallback_model: str = DEEPSEEK_MODEL,
 ) -> Tuple[str, bool]:
-    """Returns (ai_response_text, english_switch_flag). Falls back on 429.
+    """Returns (ai_response_text, english_switch_flag). Falls back to fallback_model
+    on any model failure (rate limit, empty content, bad id).
 
     `history` is the in-session [{"role": "user"|"assistant", "content": str}, ...]
     of prior turns so the model has conversational memory, not a one-shot reply.
@@ -121,10 +121,9 @@ async def build_conversation_response(
 
     try:
         text = await call_openrouter(conv_model, messages, max_tokens=200, temperature=0.7)
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 429:
-            text = await call_openrouter(fallback_model, messages, max_tokens=200, temperature=0.7)
-        else:
-            raise
+    except httpx.HTTPStatusError:
+        # Rate limit, empty content, bad model id, etc. → try the fallback model
+        # before failing the whole turn.
+        text = await call_openrouter(fallback_model, messages, max_tokens=200, temperature=0.7)
 
     return text, _detect_english_switch(text)

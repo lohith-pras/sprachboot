@@ -1,0 +1,29 @@
+# SprachBoot — for friends. No repo, no build. Just Docker + this file.
+#
+#   1. Install Docker Desktop and start it.
+#   2. Save this file as docker-compose.yml in any empty folder.
+#   3. In that folder, run:  docker compose up
+#   4. Open http://localhost:3000 and paste your own OpenRouter API key.
+#
+# Your data + key stay on your machine in the named volume. Stop with Ctrl+C.
+services:
+  backend:
+    image: ghcr.io/lohith-pras/sprachboot-backend:latest
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/sprachboot.db
+      CHROMA_PERSIST_DIR: /data/chroma
+      SPRACHBOOT_KEYS_FILE: /data/api_keys.json
+    volumes:
+      - sprachboot-data:/data
+
+  frontend:
+    image: ghcr.io/lohith-pras/sprachboot-frontend:latest
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  sprachboot-data:

@@ -29,6 +29,7 @@ class TurnResponse(BaseModel):
     english_switch: bool
     errors: List[ErrorItem] = []
     corrected_input: Optional[str] = None
+    flow_band: Optional[str] = None  # 'ease'|'hold'|'stretch' — drives the live flow dial
 
 
 class SessionEndRequest(BaseModel):
@@ -95,6 +96,8 @@ class ReceiptResponse(BaseModel):
     scenario_title: Optional[str] = None
     counterpart_role: Optional[str] = None
     goals: List["GoalResult"] = []
+    flow_zone_pct: Optional[float] = None     # % of scored turns held in the flow channel
+    flow_timeline: List[str] = []             # per-turn band: 'ease'|'hold'|'stretch'
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────

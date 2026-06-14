@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.db import get_db, Session as DBSession, Turn, Scenario, get_or_create_preferences, AsyncSessionLocal
@@ -16,26 +16,19 @@ from services.scenario import goals_from_json
 from services.goal_scoring import score_goals, goals_hit_to_json
 from datetime import datetime
 from services.chroma_service import get_relevant_context, add_turn_to_memory
+from services.openrouter_client import transcribe
+import asyncio
+import httpx
 import tempfile
 import os
-from typing import Optional
 
 router = APIRouter()
-
-_whisper_model: Optional[object] = None
-
-
-def _get_whisper_model():
-    global _whisper_model
-    if _whisper_model is None:
-        from faster_whisper import WhisperModel
-        _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
-    return _whisper_model
 
 
 @router.post("/turn", response_model=TurnResponse)
 async def session_turn(
     req: TurnRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     # Auto-create session if not provided. A scenario session is topic-tagged
@@ -53,18 +46,15 @@ async def session_turn(
         if not existing:
             raise HTTPException(status_code=404, detail="Session not found")
 
-    # Step 1: Analyze current input synchronously — closes the learning loop
-    weak_patterns_before = await get_weak_patterns(db, limit=5)
-    previously_weak_keys = [p["pattern_key"] for p in weak_patterns_before]
-    analysis = await analyze_errors(req.user_input)
+    # Weak patterns BEFORE this turn — used to shape the reply and (in the
+    # background) to credit success. No model call on the critical path.
+    weak_patterns = await get_weak_patterns(db, limit=5)
+    previously_weak_keys = [p["pattern_key"] for p in weak_patterns]
 
-    # Step 2: Store turn (need turn_id before persist_analysis writes errors)
-    turn = Turn(
-        session_id=session_id,
-        user_raw=req.user_input,
-        user_corrected=analysis.get("corrected"),
-        error_count=len(analysis.get("errors", [])),
-    )
+    # Store the turn immediately. Error analysis runs in the background (below);
+    # user_corrected + error_count are filled in then, and the frontend polls
+    # GET /session/turn/{id} to pick them up.
+    turn = Turn(session_id=session_id, user_raw=req.user_input)
     db.add(turn)
     await db.flush()
     turn_id = turn.id
@@ -74,12 +64,8 @@ async def session_turn(
     sess.turn_count = (sess.turn_count or 0) + 1
     await db.commit()
 
-    # Step 3: Persist errors + success signals synchronously so state is fresh
-    await persist_analysis(turn_id, analysis, previously_weak_keys)
-
-    # Step 4: Re-read state — now reflects this turn's errors and successes
+    # Read state for the reply (reflects everything up to the previous turn).
     async with AsyncSessionLocal() as fresh_db:
-        weak_patterns = await get_weak_patterns(fresh_db, limit=5)
         low_conf_words = await get_low_confidence_words(fresh_db, limit=10)
         current_level = await estimate_level(fresh_db)
         history = await get_session_history(fresh_db, session_id, before_turn_id=turn_id)
@@ -139,15 +125,18 @@ async def session_turn(
         upd_turn = upd_result.scalar_one()
         upd_turn.ai_response = ai_response
         upd_turn.had_english_switch = english_switch
+        upd_turn.flow_band = difficulty["band"]
         await upd_db.commit()
 
     # Save to ChromaDB
     add_turn_to_memory(session_id, req.user_input, ai_response)
 
-    # Step 7: Recompute overall_score incrementally — NOT gated on /session/end.
-    # A tab-close means /end may never fire; a NULL score would skew the baseline.
-    async with AsyncSessionLocal() as score_db:
-        await recompute_session_score(score_db, session_id)
+    # Error analysis + score recompute run AFTER the response is sent, off the
+    # critical path — the reply no longer waits for the slow analysis model. The
+    # frontend polls GET /session/turn/{id} for the correction + errors.
+    background_tasks.add_task(
+        _analyze_and_score, turn_id, req.user_input, previously_weak_keys, session_id
+    )
 
     return TurnResponse(
         turn_id=turn_id,
@@ -156,7 +145,22 @@ async def session_turn(
         english_switch=english_switch,
         errors=[],          # filled by background task; poll GET /session/turn/{id}
         corrected_input=None,
+        flow_band=difficulty["band"],
     )
+
+
+async def _analyze_and_score(
+    turn_id: int, user_raw: str, previously_weak_keys: list, session_id: int
+):
+    """Runs after the turn response is sent: error analysis → persist → rescore.
+
+    Off the critical path so the conversation reply isn't blocked by the slow
+    analysis model. Results surface to the frontend via GET /session/turn/{id}.
+    """
+    analysis = await analyze_errors(user_raw)
+    await persist_analysis(turn_id, analysis, previously_weak_keys)
+    async with AsyncSessionLocal() as score_db:
+        await recompute_session_score(score_db, session_id)
 
 
 @router.post("/end", response_model=SessionEndResponse)
@@ -229,6 +233,8 @@ async def session_receipt(session_id: int, db: AsyncSession = Depends(get_db)):
         scenario_title=receipt["scenario_title"],
         counterpart_role=receipt["counterpart_role"],
         goals=[GoalResult(**g) for g in receipt["goals"]],
+        flow_zone_pct=receipt["flow_zone_pct"],
+        flow_timeline=receipt["flow_timeline"],
     )
 
 
@@ -265,23 +271,37 @@ async def get_turn_errors(turn_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
-    """Transcribes an uploaded audio file to text using faster-whisper."""
-    model = _get_whisper_model()
-    
-    # Save the uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
-        content = await audio.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-        
+    """Transcribe uploaded audio to German text via OpenRouter (no local model).
+
+    The browser records WebM/Opus; OpenRouter's STT endpoint wants WAV, so we
+    transcode with ffmpeg (bundled in the container) to 16 kHz mono first.
+    """
+    raw = await audio.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as src:
+        src.write(raw)
+        src_path = src.name
+    wav_path = src_path.rsplit(".", 1)[0] + ".wav"
+
     try:
-        # initial_prompt provides context and hints common vocabulary to Whisper
-        prompt = "Hallo! Lass uns auf Deutsch unterhalten. Ja sicher, was machst du heute?"
-        segments, info = model.transcribe(tmp_path, language="de", initial_prompt=prompt)
-        text = " ".join([segment.text for segment in segments])
-        return {"text": text.strip()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", src_path, "-ar", "16000", "-ac", "1", wav_path,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, err = await proc.communicate()
+        if proc.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"ffmpeg transcode failed: {err.decode(errors='replace')[:200]}",
+            )
+
+        with open(wav_path, "rb") as f:
+            wav_bytes = f.read()
+        text = await transcribe(wav_bytes, fmt="wav", language="de")
+        return {"text": text}
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Transcription failed: {e}")
     finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        for p in (src_path, wav_path):
+            if os.path.exists(p):
+                os.remove(p)

@@ -7,7 +7,7 @@ with the difficulty controller, and the receipt is scoped to the scenario.
 """
 import json
 from typing import Dict, List
-from services.openrouter_client import call_openrouter, LLAMA_MODEL
+from services.openrouter_client import call_openrouter, CONV_MODEL
 
 SCENARIO_PROMPT = """\
 A German learner (level {level}) wants to rehearse a real upcoming situation:
@@ -30,7 +30,7 @@ RULES:
 
 
 async def generate_scenario(
-    situation: str, level: str = "A1", conv_model: str = LLAMA_MODEL
+    situation: str, level: str = "A1", conv_model: str = CONV_MODEL
 ) -> Dict:
     """Generate a role-play setup from a free-text situation. Safe fallback on failure."""
     from services.openrouter_client import resolve_api_key
