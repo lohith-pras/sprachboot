@@ -42,7 +42,7 @@ DeepL translation is optional — leave that field blank to skip it.
 
 Friends don't clone anything. Publish prebuilt images once, then they run two commands.
 
-**You (once per update):** `./publish.sh` — builds multi-arch images and pushes them to GHCR. See the script header for one-time login + making the packages public.
+**Publishing (automatic):** every push to `main` builds multi-arch images on GitHub Actions and pushes them to GHCR (`.github/workflows/publish.yml`). After the first run, set both packages (`sprachboot-backend`, `sprachboot-frontend`) to **Public** once so friends can pull without logging in. `./publish.sh` is the manual fallback if you want to push from your machine instead.
 
 **Your friend:**
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and start it.
