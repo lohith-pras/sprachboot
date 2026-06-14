@@ -2,7 +2,6 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from main import app
 from models.db import get_db
-from services import keychain
 
 
 @pytest.fixture(autouse=True)

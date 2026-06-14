@@ -1,5 +1,4 @@
 """Simplified SM-2 spaced repetition algorithm (CLAUDE.md §10)."""
-from datetime import datetime, timedelta
 
 
 def update_interval(current_interval: int, was_correct: bool) -> int:

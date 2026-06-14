@@ -66,4 +66,6 @@ export interface Receipt {
   scenario_title: string | null
   counterpart_role: string | null
   goals: GoalResult[]
+  flow_zone_pct: number | null
+  flow_timeline: string[]
 }

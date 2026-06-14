@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from datetime import datetime, timedelta
-from models.db import get_db, Session as DBSession, TestResult, WordStat, PatternStat
+from models.db import get_db, Session as DBSession, WordStat, PatternStat
 from models.schemas import WeeklyAnalytics
 
 router = APIRouter()
@@ -47,11 +47,6 @@ async def get_analytics_dashboard(db: AsyncSession = Depends(get_db)):
         select(func.count()).select_from(WordStat)
         .where(WordStat.confidence >= 0.7)
         .where(WordStat.last_seen >= one_week_ago)
-    )
-    
-    # 8. Test scores trend over time
-    tests = await db.scalars(
-        select(TestResult).order_by(TestResult.date)
     )
     
     return WeeklyAnalytics(

@@ -1,9 +1,12 @@
 import chromadb
+import os
 import uuid
-from typing import List
 
-# Initialize the Chroma client pointing to a local directory
-chroma_client = chromadb.PersistentClient(path="./chroma_data")
+# Initialize the Chroma client. Path is overridable via CHROMA_PERSIST_DIR so a
+# Docker volume can persist memory outside the image (defaults to local dir).
+chroma_client = chromadb.PersistentClient(
+    path=os.getenv("CHROMA_PERSIST_DIR", "./chroma_data")
+)
 collection = chroma_client.get_or_create_collection(name="conversations")
 
 def add_turn_to_memory(session_id: int, user_input: str, ai_response: str):

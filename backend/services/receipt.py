@@ -114,6 +114,7 @@ async def _load_turn_data(db: AsyncSession, session_id: int) -> List[Dict]:
             "ai_response": t.ai_response,
             "error_count": t.error_count or 0,
             "severities": sev_by_turn.get(t.id, []),
+            "flow_band": t.flow_band,
         }
         for t in turns
     ]
@@ -181,6 +182,12 @@ async def build_receipt(db: AsyncSession, session_id: int) -> Optional[Dict]:
         trailing_avg = round(sum(priors) / len(priors), 4)
         delta = round(score - trailing_avg, 4) if score is not None else None
 
+    # Flow-zone history — the Regelkreis made visible. % of scored turns held in
+    # the flow channel ('hold'), plus the per-turn band timeline.
+    bands = [t["flow_band"] for t in turn_data if t["flow_band"]]
+    flow_zone_pct = round(sum(1 for b in bands if b == "hold") / len(bands), 3) if bands else None
+    flow_timeline = bands
+
     # Scenario-scoped extras.
     scenario_title = None
     counterpart_role = None
@@ -207,4 +214,6 @@ async def build_receipt(db: AsyncSession, session_id: int) -> Optional[Dict]:
         "scenario_title": scenario_title,
         "counterpart_role": counterpart_role,
         "goals": goals,
+        "flow_zone_pct": flow_zone_pct,
+        "flow_timeline": flow_timeline,
     }

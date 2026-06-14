@@ -5,7 +5,7 @@ async def test_creates_default_row_on_first_access(db):
     prefs = await get_or_create_preferences(db)
     assert prefs.id == 1
     assert prefs.user_name == "User"
-    assert prefs.conv_model == "meta-llama/llama-3.3-70b-instruct"
+    assert prefs.conv_model == "google/gemma-4-31b-it:free"
     assert prefs.analysis_model == "deepseek/deepseek-v4-flash"
     assert prefs.onboarding_complete is False
 

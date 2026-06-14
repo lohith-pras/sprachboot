@@ -42,6 +42,10 @@ dist/
 *.sqlite
 *.sqlite3
 
+# ChromaDB vector store (local persistence + per-install data)
+chroma_data/
+chroma_db/
+
 # Agent / Tool Cache/Logs (if they shouldn't be committed)
 .claude/
 .agents/logs/

@@ -62,6 +62,7 @@ class Turn(Base):
     ai_response: Mapped[str] = mapped_column(Text, default="")  # filled after AI replies
     error_count: Mapped[int] = mapped_column(Integer, default=0)
     had_english_switch: Mapped[bool] = mapped_column(Boolean, default=False)
+    flow_band: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # 'ease'|'hold'|'stretch'
 
     session: Mapped["Session"] = relationship("Session", back_populates="turns")
     errors: Mapped[List["Error"]] = relationship("Error", back_populates="turn")
@@ -142,7 +143,7 @@ class UserPreferences(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     user_name: Mapped[str] = mapped_column(String(100), default="User")
     conv_model: Mapped[str] = mapped_column(
-        String(200), default="meta-llama/llama-3.3-70b-instruct"
+        String(200), default="google/gemma-4-31b-it:free"
     )
     analysis_model: Mapped[str] = mapped_column(
         String(200), default="deepseek/deepseek-v4-flash"
@@ -156,11 +157,11 @@ async def _ensure_columns(conn):
     Adds columns introduced after a table was first created. SQLite supports
     ADD COLUMN; each add is guarded by a PRAGMA check so it is safe to re-run.
     """
-    from sqlalchemy import text
     # (table, column, DDL type)
     wanted = [
         ("sessions", "scenario_id", "INTEGER"),
         ("sessions", "goals_hit", "TEXT"),
+        ("turns", "flow_band", "VARCHAR(10)"),
         ("scenarios", "transfer_status", "VARCHAR(20) DEFAULT 'none'"),
         ("scenarios", "transfer_report", "TEXT"),
         ("scenarios", "last_practiced_at", "DATETIME"),

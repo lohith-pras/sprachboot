@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import ChatBubble from '@/components/ChatBubble'
 import ErrorOverlay from '@/components/ErrorOverlay'
 import LevelBadge from '@/components/LevelBadge'
+import FlowDial, { FlowBand } from '@/components/FlowDial'
 import { useSessionTimer } from '@/hooks/useSessionTimer'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import { useErrorPoll } from '@/hooks/useErrorPoll'
@@ -55,6 +56,7 @@ export default function SpeakPage() {
   const [transferDraft, setTransferDraft] = useState('')
   const [correctionOpen, setCorrectionOpen] = useState(true)
   const [level, setLevel]             = useState('A1')
+  const [flowBand, setFlowBand]       = useState<FlowBand>(null)
 
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const threadRef = useRef<HTMLDivElement>(null)
@@ -143,6 +145,7 @@ export default function SpeakPage() {
       }
 
       if (!sessionId) setSessionId(data.session_id)
+      if (data.flow_band) setFlowBand(data.flow_band as FlowBand)
 
       setMessages((prev) => {
         const aiMsg: Message = {
@@ -272,6 +275,28 @@ export default function SpeakPage() {
             </p>
           </article>
         </div>
+
+        {/* Flow zone held — the dial's history */}
+        {receipt?.flow_zone_pct != null && (
+          <div className="bento" style={{ marginTop: 'var(--space-lg)' }}>
+            <article className="cell span-2x1">
+              <span className="mono-label cell__tag">Held the flow zone {Math.round(receipt.flow_zone_pct * 100)}% of the session</span>
+              <div style={{ display: 'flex', gap: 2, marginTop: 'var(--space-md)', height: 14 }}>
+                {receipt.flow_timeline.map((b, i) => (
+                  <span key={i} title={b} style={{ flex: 1, borderRadius: 2,
+                    background: b === 'hold' ? 'var(--color-accent-2)' : b === 'ease' ? 'var(--color-accent-3)' : 'var(--color-ink-2)' }} />
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)' }}>
+                {[['in flow', 'var(--color-accent-2)'], ['too easy', 'var(--color-ink-2)'], ['too hard', 'var(--color-accent-3)']].map(([label, color]) => (
+                  <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color }} />{label}
+                  </span>
+                ))}
+              </div>
+            </article>
+          </div>
+        )}
 
         {/* Scenario goals — did you do what you came to do? */}
         {receipt?.goals && receipt.goals.length > 0 && (
@@ -413,6 +438,13 @@ export default function SpeakPage() {
             </button>
           </div>
         </div>
+
+        {/* Live flow dial — the Regelkreis, visible */}
+        {sessionActive && (
+          <div style={{ padding: '0.5rem var(--space-md)', borderBottom: '1px solid var(--color-paper-2)' }}>
+            <FlowDial band={flowBand} />
+          </div>
+        )}
 
         {/* Main area */}
         <div className="speak-main">

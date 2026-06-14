@@ -15,7 +15,7 @@ export default function OnboardPage() {
   const [keys, setKeys] = useState({ openrouter: '', deepl: '' })
   const [testResult, setTestResult] = useState<Record<string, string>>({})
   const [models, setModels] = useState<ModelOption[]>([])
-  const [convModel, setConvModel] = useState('meta-llama/llama-3.3-70b-instruct')
+  const [convModel, setConvModel] = useState('google/gemma-4-31b-it:free')
   const [analysisModel, setAnalysisModel] = useState('deepseek/deepseek-v4-flash')
   const [filter, setFilter] = useState('')
   const [saving, setSaving] = useState(false)

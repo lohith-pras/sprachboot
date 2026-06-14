@@ -1,9 +1,11 @@
-"""Calls DeepSeek V4 Flash to analyze grammar errors. Runs synchronously before conversation."""
+"""Grammar error analysis via the configured analysis model. Runs as a
+background task after each turn (see routers/session.py) so it never blocks
+the conversation reply; results are polled via GET /session/turn/{id}."""
 import json
 from datetime import datetime, timedelta
 from typing import List
 from models.db import AsyncSessionLocal, Turn, Error, WordStat, PatternStat
-from services.openrouter_client import call_openrouter, DEEPSEEK_MODEL
+from services.openrouter_client import call_openrouter
 from services.spaced_repetition import update_interval
 from sqlalchemy import select
 
@@ -180,9 +182,3 @@ async def persist_analysis(
             ws.next_review = datetime.now() + timedelta(days=new_interval)
 
         await db.commit()
-
-
-async def analyze_errors_background(turn_id: int, user_raw: str, ai_response: str):
-    """Legacy wrapper — kept for any callers that still use it."""
-    analysis = await analyze_errors(user_raw)
-    await persist_analysis(turn_id, analysis)
