@@ -1,0 +1,61 @@
+name: Publish Docker images
+
+# Builds multi-arch (amd64 + arm64) backend + frontend images and pushes them
+# to GHCR, so friends can run prebuilt images via compose.friend.yml without
+# cloning or building. Runs on every push to main and on demand.
+#
+# After the FIRST successful run: github.com -> your profile -> Packages ->
+# set sprachboot-backend AND sprachboot-frontend to Public so friends can pull
+# without logging in. (One-time; visibility sticks after that.)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3      # enables arm64 emulation on the runner
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/sprachboot-backend:latest
+            ghcr.io/${{ github.repository_owner }}/sprachboot-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8000
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/sprachboot-frontend:latest
+            ghcr.io/${{ github.repository_owner }}/sprachboot-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
